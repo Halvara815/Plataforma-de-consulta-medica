@@ -1,0 +1,121 @@
+[
+  {
+    "id": "REC-0001",
+    "folio": "REC-0004587",
+    "pacienteId": "PAC-0001",
+    "medicoId": "MED-0001",
+    "fecha": "2026-07-18",
+    "tipo": "ambulatoria",
+    "vigenciaDias": 5,
+    "medicamentos": [
+      { "nombre": "Amoxicilina / Ácido clavulánico", "concentracion": "875 mg/125 mg", "dosis": "1 tableta", "frecuencia": "Cada 24 h", "duracion": "7 días", "via": "Oral", "indicaciones": "Tomar con alimentos." },
+      { "nombre": "Loratadina", "concentracion": "10 mg", "dosis": "1 tableta", "frecuencia": "Cada 24 h", "duracion": "5 días", "via": "Oral", "indicaciones": "En la mañana." },
+      { "nombre": "Paracetamol", "concentracion": "500 mg", "dosis": "1 tableta", "frecuencia": "Cada 8 h", "duracion": "3 días", "via": "Oral", "indicaciones": "Solo en caso de fiebre o dolor." }
+    ],
+    "interacciones": [
+      { "medicamentos": ["Amoxicilina / Ácido clavulánico", "Anticonceptivo oral combinado"], "descripcion": "Amoxicilina puede disminuir el efecto de anticonceptivos orales. Considere método adicional.", "severidad": "media" }
+    ],
+    "notasPaciente": "Completar el tratamiento. Acudir a revisión en 5 días o antes si presenta fiebre persistente, dificultad para respirar o empeoramiento.",
+    "firma": { "medico": "Dr. Carlos Pérez", "cedula": "12345678" },
+    "estado": "activa"
+  },
+  {
+    "id": "REC-0002",
+    "folio": "REC-0004512",
+    "pacienteId": "PAC-0001",
+    "medicoId": "MED-0001",
+    "fecha": "2026-06-20",
+    "tipo": "controlado",
+    "vigenciaDias": 30,
+    "medicamentos": [
+      { "nombre": "Losartán", "concentracion": "50 mg", "dosis": "1 tableta", "frecuencia": "Cada 12 h", "duracion": "30 días", "via": "Oral", "indicaciones": "Tomar a la misma hora cada día." },
+      { "nombre": "Hidroclorotiazida", "concentracion": "12.5 mg", "dosis": "1 tableta", "frecuencia": "Cada 24 h", "duracion": "30 días", "via": "Oral", "indicaciones": "Por la mañana." }
+    ],
+    "interacciones": [],
+    "notasPaciente": "Control de presión arterial en casa. Cita de seguimiento en 4 semanas.",
+    "firma": { "medico": "Dr. Carlos Pérez", "cedula": "12345678" },
+    "estado": "activa"
+  },
+  {
+    "id": "REC-0003",
+    "folio": "REC-0004498",
+    "pacienteId": "PAC-0003",
+    "medicoId": "MED-0002",
+    "fecha": "2026-07-05",
+    "tipo": "controlado",
+    "vigenciaDias": 30,
+    "medicamentos": [
+      { "nombre": "Metformina", "concentracion": "850 mg", "dosis": "1 tableta", "frecuencia": "Cada 12 h", "duracion": "30 días", "via": "Oral", "indicaciones": "Tomar con alimentos." }
+    ],
+    "interacciones": [],
+    "notasPaciente": "Control de glucemia capilar diario.",
+    "firma": { "medico": "Dra. Ana Martínez", "cedula": "87654321" },
+    "estado": "activa"
+  },
+  {
+    "id": "REC-0004",
+    "folio": "REC-0004480",
+    "pacienteId": "PAC-0007",
+    "medicoId": "MED-0001",
+    "fecha": "2026-07-10",
+    "tipo": "ambulatoria",
+    "vigenciaDias": 5,
+    "medicamentos": [
+      { "nombre": "Paracetamol", "concentracion": "500 mg", "dosis": "1 tableta", "frecuencia": "Cada 8 h", "duracion": "3 días", "via": "Oral", "indicaciones": "En caso de fiebre o malestar." }
+    ],
+    "interacciones": [],
+    "notasPaciente": "Abundantes líquidos y reposo relativo.",
+    "firma": { "medico": "Dr. Carlos Pérez", "cedula": "12345678" },
+    "estado": "activa"
+  },
+  {
+    "id": "REC-0005",
+    "folio": "REC-0004465",
+    "pacienteId": "PAC-0005",
+    "medicoId": "MED-0001",
+    "fecha": "2026-07-14",
+    "tipo": "ambulatoria",
+    "vigenciaDias": 5,
+    "medicamentos": [
+      { "nombre": "Diclofenaco", "concentracion": "50 mg", "dosis": "1 tableta", "frecuencia": "Cada 12 h", "duracion": "5 días", "via": "Oral", "indicaciones": "Tomar con alimentos." }
+    ],
+    "interacciones": [
+      { "medicamentos": ["Diclofenaco", "Hidroclorotiazida"], "descripcion": "Riesgo de disminución del efecto diurético y daño renal con uso prolongado.", "severidad": "alta" }
+    ],
+    "notasPaciente": "Reposo relativo y calor local en la zona lumbar.",
+    "firma": { "medico": "Dr. Carlos Pérez", "cedula": "12345678" },
+    "estado": "activa"
+  },
+  {
+    "id": "REC-0006",
+    "folio": "REC-0004440",
+    "pacienteId": "PAC-0009",
+    "medicoId": "MED-0002",
+    "fecha": "2026-07-13",
+    "tipo": "ambulatoria",
+    "vigenciaDias": 30,
+    "medicamentos": [
+      { "nombre": "Ácido fólico", "concentracion": "5 mg", "dosis": "1 tableta", "frecuencia": "Cada 24 h", "duracion": "30 días", "via": "Oral", "indicaciones": "Con el desayuno." }
+    ],
+    "interacciones": [],
+    "notasPaciente": "Cita de seguimiento de control prenatal en 4 semanas.",
+    "firma": { "medico": "Dra. Ana Martínez", "cedula": "87654321" },
+    "estado": "activa"
+  },
+  {
+    "id": "REC-0007",
+    "folio": "REC-0004398",
+    "pacienteId": "PAC-0008",
+    "medicoId": "MED-0002",
+    "fecha": "2026-06-15",
+    "tipo": "ambulatoria",
+    "vigenciaDias": 14,
+    "medicamentos": [
+      { "nombre": "Omeprazol", "concentracion": "20 mg", "dosis": "1 tableta", "frecuencia": "Cada 24 h", "duracion": "14 días", "via": "Oral", "indicaciones": "30 minutos antes del desayuno." }
+    ],
+    "interacciones": [],
+    "notasPaciente": "Evitar irritantes gástricos (café, picante, alcohol).",
+    "firma": { "medico": "Dra. Ana Martínez", "cedula": "87654321" },
+    "estado": "vencida"
+  }
+]

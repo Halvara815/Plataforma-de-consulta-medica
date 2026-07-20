@@ -1,0 +1,15 @@
+{
+  "name": "consulta-medica-localhost",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Prototipo funcional en localhost de un sistema de consulta medica (EMR/EHR) - Fase 1 sin backend",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.4.10"
+  }
+}

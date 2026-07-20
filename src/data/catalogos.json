@@ -1,0 +1,69 @@
+{
+  "diagnosticosCIE10": [
+    { "codigo": "I10", "descripcion": "Hipertensión esencial (primaria)" },
+    { "codigo": "E11", "descripcion": "Diabetes mellitus tipo 2" },
+    { "codigo": "J06.9", "descripcion": "Infección aguda de las vías respiratorias superiores" },
+    { "codigo": "K29.7", "descripcion": "Gastritis, no especificada" },
+    { "codigo": "E78.5", "descripcion": "Dislipidemia, no especificada" },
+    { "codigo": "M54.5", "descripcion": "Dolor lumbar bajo" },
+    { "codigo": "N39.0", "descripcion": "Infección de vías urinarias, sitio no especificado" },
+    { "codigo": "J45.9", "descripcion": "Asma, no especificada" },
+    { "codigo": "R51", "descripcion": "Cefalea" },
+    { "codigo": "Z34.9", "descripcion": "Supervisión de embarazo normal, no especificado" },
+    { "codigo": "M25.5", "descripcion": "Dolor articular" },
+    { "codigo": "E03.9", "descripcion": "Hipotiroidismo, no especificado" },
+    { "codigo": "F41.1", "descripcion": "Trastorno de ansiedad generalizada" },
+    { "codigo": "L20.9", "descripcion": "Dermatitis atópica, no especificada" },
+    { "codigo": "H52.4", "descripcion": "Presbicia" }
+  ],
+  "medicamentos": [
+    { "nombre": "Amoxicilina / Ácido clavulánico", "presentaciones": ["500 mg/125 mg", "875 mg/125 mg"] },
+    { "nombre": "Loratadina", "presentaciones": ["10 mg"] },
+    { "nombre": "Paracetamol", "presentaciones": ["500 mg", "1 g"] },
+    { "nombre": "Losartán", "presentaciones": ["50 mg", "100 mg"] },
+    { "nombre": "Hidroclorotiazida", "presentaciones": ["12.5 mg", "25 mg"] },
+    { "nombre": "Metformina", "presentaciones": ["500 mg", "850 mg", "1 g"] },
+    { "nombre": "Omeprazol", "presentaciones": ["20 mg", "40 mg"] },
+    { "nombre": "Ibuprofeno", "presentaciones": ["400 mg", "600 mg"] },
+    { "nombre": "Atorvastatina", "presentaciones": ["10 mg", "20 mg"] },
+    { "nombre": "Levotiroxina", "presentaciones": ["50 mcg", "100 mcg"] },
+    { "nombre": "Salbutamol inhalado", "presentaciones": ["100 mcg/dosis"] },
+    { "nombre": "Ácido fólico", "presentaciones": ["5 mg"] },
+    { "nombre": "Anticonceptivo oral combinado", "presentaciones": ["21 tabletas"] },
+    { "nombre": "Diclofenaco", "presentaciones": ["50 mg", "75 mg inyectable"] },
+    { "nombre": "Cetirizina", "presentaciones": ["10 mg"] }
+  ],
+  "interaccionesConocidas": [
+    {
+      "medicamentos": ["Amoxicilina / Ácido clavulánico", "Anticonceptivo oral combinado"],
+      "descripcion": "Amoxicilina puede disminuir el efecto de anticonceptivos orales. Considere método adicional.",
+      "severidad": "media"
+    },
+    {
+      "medicamentos": ["Ibuprofeno", "Losartán"],
+      "descripcion": "El uso conjunto puede reducir el efecto antihipertensivo y afectar función renal.",
+      "severidad": "media"
+    },
+    {
+      "medicamentos": ["Diclofenaco", "Hidroclorotiazida"],
+      "descripcion": "Riesgo de disminución del efecto diurético y daño renal con uso prolongado.",
+      "severidad": "alta"
+    }
+  ],
+  "aseguradoras": ["Fidalidad", "FabiSalud", "Aseguradora Nacional", "MediSegura", "Particular"],
+  "especialidades": ["Médico General", "Medicina Interna", "Ginecología", "Pediatría", "Cardiología", "Dermatología"],
+  "consultorios": ["Consultorio 1", "Consultorio 2", "Consultorio 3"],
+  "estadosCita": ["confirmada", "pendiente", "en_consulta", "cancelada", "no_asistio", "bloqueado", "administrativo"],
+  "categoriasDocumento": ["RX", "Laboratorio", "Nota", "Informe", "DICOM", "Evolución", "Electrocardiograma"],
+  "estudiosCatalogo": [
+    "Biometría hemática completa",
+    "Química sanguínea (perfil bioquímico 24 elementos)",
+    "Perfil de lípidos",
+    "Examen general de orina",
+    "Radiografía de tórax PA",
+    "Ultrasonido abdominal superior",
+    "Electrocardiograma",
+    "Resonancia magnética de rodilla",
+    "Perfil tiroideo"
+  ]
+}

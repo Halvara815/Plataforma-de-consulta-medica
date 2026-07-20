@@ -1,0 +1,29 @@
+[
+  {
+    "id": "MED-0001",
+    "nombre": "Dr. Carlos Pérez",
+    "especialidad": "Médico General",
+    "cedula": "12345678",
+    "consultorio": "Consultorio 1",
+    "firma": "Carlos Pérez",
+    "estado": "activo"
+  },
+  {
+    "id": "MED-0002",
+    "nombre": "Dra. Ana Martínez",
+    "especialidad": "Medicina Interna",
+    "cedula": "87654321",
+    "consultorio": "Consultorio 2",
+    "firma": "Ana Martínez",
+    "estado": "activo"
+  },
+  {
+    "id": "MED-0003",
+    "nombre": "Dra. Lucía Ramírez",
+    "especialidad": "Ginecología",
+    "cedula": "45678123",
+    "consultorio": "Consultorio 3",
+    "firma": "Lucía Ramírez",
+    "estado": "activo"
+  }
+]

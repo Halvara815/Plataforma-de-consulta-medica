@@ -1,0 +1,79 @@
+[
+  {
+    "id": "EST-0001",
+    "pacienteId": "PAC-0001",
+    "medicoId": "MED-0001",
+    "fecha": "2026-07-18",
+    "tipoEstudio": "imagen",
+    "estudiosSolicitados": ["Radiografía de tórax PA"],
+    "prioridad": "rutina",
+    "estado": "completado",
+    "notas": "Control por seguimiento de cuadro respiratorio leve."
+  },
+  {
+    "id": "EST-0002",
+    "pacienteId": "PAC-0003",
+    "medicoId": "MED-0002",
+    "fecha": "2026-06-28",
+    "tipoEstudio": "laboratorio",
+    "estudiosSolicitados": ["Química sanguínea (perfil bioquímico 24 elementos)", "Perfil de lípidos"],
+    "prioridad": "rutina",
+    "estado": "completado",
+    "notas": "Control metabólico de diabetes mellitus tipo 2."
+  },
+  {
+    "id": "EST-0003",
+    "pacienteId": "PAC-0001",
+    "medicoId": "MED-0001",
+    "fecha": "2026-07-06",
+    "tipoEstudio": "imagen",
+    "estudiosSolicitados": ["Resonancia magnética de rodilla"],
+    "prioridad": "rutina",
+    "estado": "completado",
+    "notas": "Dolor articular persistente."
+  },
+  {
+    "id": "EST-0004",
+    "pacienteId": "PAC-0009",
+    "medicoId": "MED-0002",
+    "fecha": "2026-07-13",
+    "tipoEstudio": "imagen",
+    "estudiosSolicitados": ["Ultrasonido abdominal superior"],
+    "prioridad": "rutina",
+    "estado": "completado",
+    "notas": "Control prenatal, evaluación obstétrica."
+  },
+  {
+    "id": "EST-0005",
+    "pacienteId": "PAC-0006",
+    "medicoId": "MED-0002",
+    "fecha": "2026-07-16",
+    "tipoEstudio": "laboratorio",
+    "estudiosSolicitados": ["Biometría hemática completa", "Perfil tiroideo"],
+    "prioridad": "urgente",
+    "estado": "en_proceso",
+    "notas": "Evaluación de fatiga persistente."
+  },
+  {
+    "id": "EST-0006",
+    "pacienteId": "PAC-0010",
+    "medicoId": "MED-0001",
+    "fecha": "2026-07-17",
+    "tipoEstudio": "laboratorio",
+    "estudiosSolicitados": ["Biometría hemática completa"],
+    "prioridad": "rutina",
+    "estado": "solicitado",
+    "notas": "Control postquirúrgico de rutina."
+  },
+  {
+    "id": "EST-0007",
+    "pacienteId": "PAC-0002",
+    "medicoId": "MED-0002",
+    "fecha": "2026-07-15",
+    "tipoEstudio": "imagen",
+    "estudiosSolicitados": ["Electrocardiograma"],
+    "prioridad": "rutina",
+    "estado": "solicitado",
+    "notas": "Control cardiovascular anual."
+  }
+]
