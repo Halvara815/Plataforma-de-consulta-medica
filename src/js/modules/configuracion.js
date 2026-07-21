@@ -4,6 +4,7 @@ import { setTopbarTitle } from '../components/topbar.js';
 import { cardHtml } from '../components/card.js';
 import { resetDemoData } from '../services/dataService.js';
 import { idbExportAll, idbBulkPut, isIndexedDbAvailable, STORES } from '../storage.js';
+import { icon } from '../icons.js';
 
 let cleanupFns = [];
 
@@ -71,11 +72,11 @@ export async function mount(container) {
                 ${isIndexedDbAvailable() ? '' : ' — IndexedDB no está disponible en este navegador, así que los cambios no persistirán entre recargas.'}.
               </p>
               <div class="view-actions" style="margin-top:12px;">
-                <button type="button" class="btn btn-secondary" id="btn-exportar">⬇ Exportar respaldo (JSON)</button>
-                <label class="btn btn-secondary" for="input-importar" style="cursor:pointer;">⬆ Importar respaldo
+                <button type="button" class="btn btn-secondary" id="btn-exportar">${icon('download', { size: 14 })} Exportar respaldo (JSON)</button>
+                <label class="btn btn-secondary" for="input-importar" style="cursor:pointer;">${icon('upload', { size: 14 })} Importar respaldo
                   <input type="file" id="input-importar" accept="application/json" style="display:none;" />
                 </label>
-                <button type="button" class="btn btn-danger" id="btn-reset">↺ Restablecer datos demo</button>
+                <button type="button" class="btn btn-danger" id="btn-reset">${icon('refresh', { size: 14 })} Restablecer datos demo</button>
               </div>
               <div id="respaldo-status" class="text-tertiary" style="font-size:12px; margin-top:8px;"></div>
             `

@@ -1,14 +1,49 @@
 import { getAll, getById, create, query as queryCollection } from '../services/dataService.js';
 import { setTopbarTitle } from '../components/topbar.js';
 import { cardHtml } from '../components/card.js';
-import { createTabs } from '../components/tabs.js';
+import { createSectionNav } from '../components/sectionNav.js';
 import { openModal } from '../components/modal.js';
 import { textField, selectField, getFormData, validateRequired } from '../components/form.js';
 import { navigateTo } from '../router.js';
 import { calcAge, escapeHtml, formatDate, initials } from '../utils.js';
+import { icon } from '../icons.js';
+
+import * as pacienteDashboard from './paciente/dashboard.js';
+import * as pacienteDatosGenerales from './paciente/datosGenerales.js';
+import * as pacienteHistorialClinico from './paciente/historialClinico.js';
+import * as pacienteConsultas from './paciente/consultas.js';
+import * as pacienteDiagnosticos from './paciente/diagnosticos.js';
+import * as pacienteTratamientos from './paciente/tratamientos.js';
+import * as pacienteMedicamentos from './paciente/medicamentos.js';
+import * as pacienteAlergias from './paciente/alergias.js';
+import * as pacienteSignosVitales from './paciente/signosVitales.js';
+import * as pacienteLaboratorios from './paciente/laboratorios.js';
+import * as pacienteImagenesMedicas from './paciente/imagenesMedicas.js';
+import * as pacienteDocumentos from './paciente/documentos.js';
+import * as pacienteCitas from './paciente/citas.js';
+import * as pacienteReferencias from './paciente/referencias.js';
+import * as pacienteConfiguracion from './paciente/configuracion.js';
+
+const SECTIONS = [
+  { id: 'dashboard', label: 'Dashboard del paciente', icon: 'dashboard', mod: pacienteDashboard },
+  { id: 'datosGenerales', label: 'Datos generales', icon: 'id-card', mod: pacienteDatosGenerales },
+  { id: 'historialClinico', label: 'Historial clínico', icon: 'history', mod: pacienteHistorialClinico },
+  { id: 'consultas', label: 'Consultas', icon: 'clipboard-list', mod: pacienteConsultas },
+  { id: 'diagnosticos', label: 'Diagnósticos', icon: 'stethoscope', mod: pacienteDiagnosticos },
+  { id: 'tratamientos', label: 'Tratamientos', icon: 'syringe', mod: pacienteTratamientos },
+  { id: 'medicamentos', label: 'Medicamentos', icon: 'pill', mod: pacienteMedicamentos },
+  { id: 'alergias', label: 'Alergias', icon: 'droplet', mod: pacienteAlergias },
+  { id: 'signosVitales', label: 'Signos vitales', icon: 'activity', mod: pacienteSignosVitales },
+  { id: 'laboratorios', label: 'Laboratorios', icon: 'flask', mod: pacienteLaboratorios },
+  { id: 'imagenesMedicas', label: 'Imágenes médicas', icon: 'image', mod: pacienteImagenesMedicas },
+  { id: 'documentos', label: 'Documentos', icon: 'documents', mod: pacienteDocumentos },
+  { id: 'citas', label: 'Citas', icon: 'calendar', mod: pacienteCitas },
+  { id: 'referencias', label: 'Referencias', icon: 'link', mod: pacienteReferencias },
+  { id: 'configuracion', label: 'Configuración', icon: 'settings', mod: pacienteConfiguracion }
+];
 
 let cleanupFns = [];
-let activeTabs = null;
+let activeSectionNav = null;
 
 export async function mount(container, params = {}, query = {}) {
   setTopbarTitle('Pacientes', 'Consulta, gestiona y mantén la información clínica de tus pacientes');
@@ -32,7 +67,7 @@ export async function mount(container, params = {}, query = {}) {
           <p>Consulta, gestiona y mantén la información demográfica y clínica de tus pacientes.</p>
         </div>
         <div class="view-actions">
-          <button type="button" class="btn btn-primary" id="btn-nuevo-paciente">➕ Nuevo paciente</button>
+          <button type="button" class="btn btn-primary" id="btn-nuevo-paciente">${icon('plus', { size: 15 })} Nuevo paciente</button>
         </div>
       </div>
       <div class="three-col" id="pacientes-layout"></div>
@@ -56,7 +91,7 @@ function renderLayout(container, allPacientes, filtered, paciente, searchTerm) {
     <div class="card">
       <div class="stack" style="gap:10px;">
         <div class="table-search">
-          <span aria-hidden="true">🔍</span>
+          ${icon('search', { size: 16 })}
           <input type="search" id="paciente-search" placeholder="Buscar pacientes…" value="${escapeHtml(searchTerm)}" />
         </div>
         <div class="text-tertiary" style="font-size:11.5px;">${filtered.length} de ${allPacientes.length} pacientes</div>
@@ -103,23 +138,16 @@ function renderDirectory(list, selectedId) {
 
 function renderDetail(paciente) {
   const el = document.getElementById('patient-detail');
+  if (activeSectionNav) {
+    activeSectionNav.destroy();
+    activeSectionNav = null;
+  }
   if (!paciente) {
     el.innerHTML = cardHtml({ bodyHtml: '<div class="empty-state">Selecciona un paciente del directorio.</div>' });
     return;
   }
 
   const age = calcAge(paciente.fechaNacimiento);
-
-  const tabs = createTabs({
-    tabs: [
-      { id: 'resumen', label: 'Resumen' },
-      { id: 'contacto', label: 'Contacto & Seguros' },
-      { id: 'antecedentes', label: 'Antecedentes' },
-      { id: 'alertas', label: `Alertas (${paciente.alertas.length})` }
-    ],
-    activeId: 'resumen',
-    panelHtml: (tabId) => buildPanel(tabId, paciente)
-  });
 
   el.innerHTML = '';
   const header = document.createElement('div');
@@ -140,97 +168,43 @@ function renderDetail(paciente) {
         <div class="text-tertiary" style="font-size:12px; margin-top:6px;">ID Paciente: ${escapeHtml(paciente.id)}</div>
       </div>
       <div class="view-actions">
-        <a class="btn btn-secondary btn-sm" href="#/historia-clinica/${paciente.id}">📄 Historia Clínica</a>
-        <a class="btn btn-primary btn-sm" href="#/consulta/${paciente.id}">🩺 Nueva consulta</a>
+        <a class="btn btn-secondary btn-sm" href="#/historia-clinica/${paciente.id}">${icon('history', { size: 14 })} Historia Clínica</a>
+        <a class="btn btn-primary btn-sm" href="#/consulta/${paciente.id}">${icon('stethoscope', { size: 14 })} Nueva consulta</a>
       </div>
     </div>
     <div class="view-actions" style="margin-top:14px;">
-      <a class="btn btn-secondary btn-sm" href="#/recetas?pacienteId=${paciente.id}">💊 Receta</a>
-      <a class="btn btn-secondary btn-sm" href="#/documentos?pacienteId=${paciente.id}">🖼️ Documentos</a>
-      <a class="btn btn-secondary btn-sm" href="#/agenda?pacienteId=${paciente.id}">📅 Agenda</a>
+      <a class="btn btn-secondary btn-sm" href="#/recetas?pacienteId=${paciente.id}">${icon('pill', { size: 14 })} Receta</a>
+      <a class="btn btn-secondary btn-sm" href="#/documentos?pacienteId=${paciente.id}">${icon('image', { size: 14 })} Documentos</a>
+      <a class="btn btn-secondary btn-sm" href="#/agenda?pacienteId=${paciente.id}">${icon('calendar', { size: 14 })} Agenda</a>
     </div>
   `;
   el.appendChild(header);
-  el.appendChild(tabs.el);
-  activeTabs = tabs;
-}
 
-function buildPanel(tabId, paciente) {
-  if (tabId === 'resumen') {
-    return `
-      <div class="info-grid">
-        <div class="info-item"><div class="info-label">Fecha de nacimiento</div><div class="info-value">${formatDate(paciente.fechaNacimiento)}</div></div>
-        <div class="info-item"><div class="info-label">Estado civil</div><div class="info-value">${escapeHtml(paciente.estadoCivil)}</div></div>
-        <div class="info-item"><div class="info-label">CURP</div><div class="info-value">${escapeHtml(paciente.curp)}</div></div>
-        <div class="info-item"><div class="info-label">NSS</div><div class="info-value">${escapeHtml(paciente.nss)}</div></div>
-      </div>
-      <hr class="divider" style="margin:16px 0;" />
-      <div class="info-item">
-        <div class="info-label">Alergias y reacciones</div>
-        <div class="stack" style="gap:6px; margin-top:6px;">
-          ${
-            paciente.alergias.length
-              ? paciente.alergias
-                  .map((a) => `<div><span class="badge badge-danger">${escapeHtml(a.sustancia)}</span> <span class="text-tertiary" style="font-size:12px;">Reacción: ${escapeHtml(a.reaccion)}</span></div>`)
-                  .join('')
-              : '<span class="text-tertiary">Sin alergias registradas.</span>'
-          }
-        </div>
-      </div>
-    `;
-  }
-  if (tabId === 'contacto') {
-    return `
-      <div class="info-grid">
-        <div class="info-item"><div class="info-label">Email</div><div class="info-value">${escapeHtml(paciente.contacto.email)}</div></div>
-        <div class="info-item"><div class="info-label">Teléfono</div><div class="info-value">${escapeHtml(paciente.contacto.telefono)}</div></div>
-        <div class="info-item"><div class="info-label">Domicilio</div><div class="info-value">${escapeHtml(paciente.contacto.direccion)}</div></div>
-        <div class="info-item"><div class="info-label">Contacto de emergencia</div><div class="info-value">${escapeHtml(paciente.contactoEmergencia.nombre)} (${escapeHtml(paciente.contactoEmergencia.parentesco)})</div></div>
-      </div>
-      <hr class="divider" style="margin:16px 0;" />
-      <div class="info-grid">
-        <div class="info-item"><div class="info-label">Aseguradora</div><div class="info-value">${escapeHtml(paciente.aseguradora.compania)}</div></div>
-        <div class="info-item"><div class="info-label">Póliza</div><div class="info-value">${escapeHtml(paciente.aseguradora.poliza)}</div></div>
-        <div class="info-item"><div class="info-label">Plan</div><div class="info-value">${escapeHtml(paciente.aseguradora.plan)}</div></div>
-        <div class="info-item"><div class="info-label">Vigencia</div><div class="info-value">${formatDate(paciente.aseguradora.vigenciaInicio)} – ${formatDate(paciente.aseguradora.vigenciaFin)}</div></div>
-      </div>
-    `;
-  }
-  if (tabId === 'antecedentes') {
-    const consultas = queryCollection('consultas', (c) => c.pacienteId === paciente.id).sort(
-      (a, b) => new Date(b.fecha) - new Date(a.fecha)
-    );
-    const ultima = consultas[0];
-    if (!ultima) return '<div class="empty-state">Sin antecedentes registrados todavía.</div>';
-    return `
-      <div class="stack">
-        <div class="info-item"><div class="info-label">Heredofamiliares</div><div class="info-value">${escapeHtml(ultima.antecedentes.heredofamiliares || 'Sin información')}</div></div>
-        <div class="info-item"><div class="info-label">Personales patológicos</div><div class="info-value">${escapeHtml(ultima.antecedentes.personalesPatologicos || 'Sin información')}</div></div>
-        <div class="info-item"><div class="info-label">Personales no patológicos</div><div class="info-value">${escapeHtml(ultima.antecedentes.personalesNoPatologicos || 'Sin información')}</div></div>
-      </div>
-    `;
-  }
-  if (tabId === 'alertas') {
-    if (!paciente.alertas.length) return '<div class="empty-state">Sin alertas clínicas activas.</div>';
-    return `
-      <div class="stack">
-        ${paciente.alertas
-          .map(
-            (a) => `
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);">
-            <div>
-              <div style="font-size:13px; font-weight:600;">${escapeHtml(a.tipo)}</div>
-              <div class="text-tertiary" style="font-size:12px;">${escapeHtml(a.descripcion)}</div>
-            </div>
-            <span class="badge ${a.activa ? 'badge-warning' : ''}">${a.activa ? 'Activa' : 'Resuelta'}</span>
-          </div>
-        `
-          )
-          .join('')}
-      </div>
-    `;
-  }
-  return '';
+  const sectionNavContainer = document.createElement('div');
+  sectionNavContainer.className = 'card';
+  el.appendChild(sectionNavContainer);
+
+  const ctx = {
+    refresh() {
+      const fresh = getById('pacientes', paciente.id);
+      const previousActive = activeSectionNav?.getActive();
+      renderDetail(fresh);
+      if (previousActive && activeSectionNav) activeSectionNav.setActive(previousActive);
+      renderTimeline(fresh);
+    }
+  };
+
+  activeSectionNav = createSectionNav({
+    items: SECTIONS,
+    activeId: 'dashboard',
+    ariaLabel: 'Secciones del expediente del paciente',
+    renderPanel: (id, panelEl) => {
+      const section = SECTIONS.find((s) => s.id === id);
+      const fresh = getById('pacientes', paciente.id) || paciente;
+      return section.mod.render(fresh, panelEl, ctx);
+    }
+  });
+  sectionNavContainer.appendChild(activeSectionNav.el);
 }
 
 function renderTimeline(paciente) {
@@ -325,6 +299,7 @@ function openNuevoPacienteModal() {
           contactoEmergencia: { nombre: '', parentesco: '', telefono: '' },
           alergias: [],
           alertas: [],
+          referencias: [],
           estado: 'activo',
           fechaRegistro: new Date().toISOString().slice(0, 10)
         });
@@ -338,5 +313,8 @@ function openNuevoPacienteModal() {
 export function unmount() {
   cleanupFns.forEach((fn) => fn());
   cleanupFns = [];
-  activeTabs = null;
+  if (activeSectionNav) {
+    activeSectionNav.destroy();
+    activeSectionNav = null;
+  }
 }

@@ -4,6 +4,7 @@ import { cardHtml } from '../components/card.js';
 import { openModal } from '../components/modal.js';
 import { textField, selectField, getFormData, validateRequired } from '../components/form.js';
 import { escapeHtml, formatDate, statusBadgeClass, statusLabel } from '../utils.js';
+import { icon } from '../icons.js';
 
 // Ver nota en dashboard.js: fecha ancla de la demo para que la agenda muestre contenido representativo.
 const DEMO_TODAY = '2026-07-20';
@@ -30,7 +31,7 @@ export async function mount(container, params = {}, query = {}) {
           <p>Gestione y programe las citas de sus pacientes</p>
         </div>
         <div class="view-actions">
-          <button type="button" class="btn btn-primary" id="btn-nueva-cita">➕ Nueva cita</button>
+          <button type="button" class="btn btn-primary" id="btn-nueva-cita">${icon('plus', { size: 15 })} Nueva cita</button>
         </div>
       </div>
 

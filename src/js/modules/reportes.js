@@ -2,6 +2,7 @@ import { getAll, getById } from '../services/dataService.js';
 import { setTopbarTitle } from '../components/topbar.js';
 import { metricCardHtml, cardHtml } from '../components/card.js';
 import { chartColor, donutChartSvg, escapeHtml, lineChartSvg, statusBadgeClass, statusLabel } from '../utils.js';
+import { icon } from '../icons.js';
 
 let cleanupFns = [];
 
@@ -24,10 +25,10 @@ export async function mount(container) {
       </div>
 
       <div class="card-grid">
-        ${metricCardHtml({ label: 'Consultas registradas', value: consultas.length, icon: '🩺', tone: 'primary' })}
-        ${metricCardHtml({ label: 'Pacientes activos', value: pacientes.filter((p) => p.estado === 'activo').length, icon: '🧑‍⚕️', tone: 'accent' })}
-        ${metricCardHtml({ label: 'Recetas emitidas', value: recetas.length, icon: '💊', tone: 'success' })}
-        ${metricCardHtml({ label: 'Estudios solicitados', value: estudios.length, icon: '🧪', tone: 'warning' })}
+        ${metricCardHtml({ label: 'Consultas registradas', value: consultas.length, icon: icon('stethoscope'), tone: 'primary' })}
+        ${metricCardHtml({ label: 'Pacientes activos', value: pacientes.filter((p) => p.estado === 'activo').length, icon: icon('users'), tone: 'accent' })}
+        ${metricCardHtml({ label: 'Recetas emitidas', value: recetas.length, icon: icon('pill'), tone: 'success' })}
+        ${metricCardHtml({ label: 'Estudios solicitados', value: estudios.length, icon: icon('flask'), tone: 'warning' })}
       </div>
 
       <div class="two-col">

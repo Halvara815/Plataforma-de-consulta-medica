@@ -7,7 +7,8 @@
   .app-shell .sidebar-link span.label,
   .app-shell .sidebar-brand-text,
   .app-shell .sidebar-footer-text {
-    display: none;
+    max-width: 0;
+    opacity: 0;
   }
 
   .app-shell .sidebar-brand {
@@ -21,12 +22,33 @@
   .app-shell.is-sidebar-expanded .sidebar-link span.label,
   .app-shell.is-sidebar-expanded .sidebar-brand-text,
   .app-shell.is-sidebar-expanded .sidebar-footer-text {
-    display: block;
+    max-width: 180px;
+    opacity: 1;
   }
 
   .two-col,
   .three-col {
     grid-template-columns: 1fr;
+  }
+
+  .section-nav-layout {
+    flex-direction: column;
+  }
+
+  .section-nav {
+    width: 100%;
+    flex-direction: row;
+    overflow-x: auto;
+    position: static;
+    padding-bottom: 4px;
+  }
+
+  .section-nav-item span.label {
+    display: none;
+  }
+
+  .section-nav-item {
+    flex-shrink: 0;
   }
 }
 

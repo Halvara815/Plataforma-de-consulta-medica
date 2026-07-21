@@ -15,6 +15,8 @@ const routes = [
   { path: '/recetas', name: 'recetas', loader: () => import('./modules/recetas.js') },
   { path: '/documentos', name: 'documentos', loader: () => import('./modules/documentos.js') },
   { path: '/reportes', name: 'reportes', loader: () => import('./modules/reportes.js') },
+  { path: '/calculadora', name: 'calculadora', loader: () => import('./modules/calculadora.js') },
+  { path: '/herramientas', name: 'herramientas', loader: () => import('./modules/herramientas.js') },
   {
     path: '/configuracion',
     name: 'configuracion',

@@ -3,6 +3,7 @@ import { setTopbarTitle } from '../components/topbar.js';
 import { textField, textareaField, getFormData, validateRequired } from '../components/form.js';
 import { navigateTo } from '../router.js';
 import { calcAge, calcIMC, escapeHtml, initials } from '../utils.js';
+import { icon } from '../icons.js';
 
 let cleanupFns = [];
 let timerInterval = null;
@@ -105,7 +106,7 @@ export async function mount(container, params = {}) {
 
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" id="btn-cancelar-consulta">Cancelar</button>
-          <button type="submit" class="btn btn-primary" id="btn-guardar-consulta">✔ Guardar consulta</button>
+          <button type="submit" class="btn btn-primary" id="btn-guardar-consulta">${icon('check', { size: 15 })} Guardar consulta</button>
         </div>
       </form>
     </div>

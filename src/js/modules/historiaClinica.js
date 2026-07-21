@@ -3,6 +3,7 @@ import { setTopbarTitle } from '../components/topbar.js';
 import { cardHtml } from '../components/card.js';
 import { createTabs } from '../components/tabs.js';
 import { calcAge, escapeHtml, formatDate, initials } from '../utils.js';
+import { icon } from '../icons.js';
 
 let cleanupFns = [];
 
@@ -32,7 +33,7 @@ export async function mount(container, params = {}) {
           <p>Registro clínico completo y longitudinal del paciente</p>
         </div>
         <div class="view-actions">
-          <a class="btn btn-primary" href="#/consulta/${paciente.id}">🩺 Nueva consulta</a>
+          <a class="btn btn-primary" href="#/consulta/${paciente.id}">${icon('stethoscope', { size: 15 })} Nueva consulta</a>
         </div>
       </div>
 

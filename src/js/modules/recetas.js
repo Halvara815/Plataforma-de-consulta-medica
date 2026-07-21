@@ -4,6 +4,7 @@ import { createTable } from '../components/table.js';
 import { openModal } from '../components/modal.js';
 import { selectField, radioGroup, textField, textareaField, getFormData, validateRequired } from '../components/form.js';
 import { escapeHtml, formatDate, generateId } from '../utils.js';
+import { icon } from '../icons.js';
 
 let cleanupFns = [];
 let medicationRowCount = 0;
@@ -19,7 +20,7 @@ export async function mount(container, params = {}, query = {}) {
           <p>Consulta el historial de recetas y emite nuevas prescripciones con validez legal.</p>
         </div>
         <div class="view-actions">
-          <button type="button" class="btn btn-primary" id="btn-nueva-receta">➕ Nueva receta</button>
+          <button type="button" class="btn btn-primary" id="btn-nueva-receta">${icon('plus', { size: 15 })} Nueva receta</button>
         </div>
       </div>
       <div class="card" id="recetas-table-card"></div>
@@ -110,7 +111,7 @@ function openDetalleReceta(receta) {
               ${receta.interacciones
                 .map(
                   (i) =>
-                    `<div class="badge badge-warning" style="display:block; padding:10px; font-weight:400; font-size:12.5px;">⚠ ${escapeHtml(i.descripcion)}</div>`
+                    `<div class="badge badge-warning" style="display:flex; align-items:center; gap:6px; padding:10px; font-weight:400; font-size:12.5px;">${icon('alert-triangle', { size: 14 })} ${escapeHtml(i.descripcion)}</div>`
                 )
                 .join('')}
             </div>`
@@ -125,7 +126,7 @@ function openDetalleReceta(receta) {
     bodyHtml,
     size: 'lg',
     footerHtml: `
-      <button type="button" class="btn btn-secondary" id="btn-print-receta">🖨 Imprimir</button>
+      <button type="button" class="btn btn-secondary" id="btn-print-receta">${icon('printer', { size: 14 })} Imprimir</button>
       <button type="button" class="btn btn-primary" id="btn-close-receta">Cerrar</button>
     `,
     onMount: (modalEl, close) => {
@@ -149,7 +150,7 @@ function openNuevaRecetaModal(pacienteFiltro) {
       </div>
       <div class="card-header" style="margin-top:8px;">
         <h3>Medicamentos</h3>
-        <button type="button" class="btn btn-secondary btn-sm" id="btn-agregar-medicamento">➕ Agregar medicamento</button>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-agregar-medicamento">${icon('plus', { size: 14 })} Agregar medicamento</button>
       </div>
       <div id="medicamentos-rows" class="stack" style="gap:10px;"></div>
       <div id="interacciones-preview"></div>
@@ -232,7 +233,7 @@ function addMedicationRow(container, catalogos) {
   row.className = 'medicamento-row';
   row.style.cssText = 'padding:12px; border:1px solid var(--border-color); border-radius:var(--radius-md); position:relative;';
   row.innerHTML = `
-    <button type="button" data-remove-row class="btn btn-ghost btn-sm" style="position:absolute; top:8px; right:8px;">✕</button>
+    <button type="button" data-remove-row class="btn btn-ghost btn-sm" style="position:absolute; top:8px; right:8px;">${icon('x', { size: 14 })}</button>
     <div class="form-grid">
       <div class="form-field span-2">
         <label>Medicamento</label>
@@ -287,7 +288,7 @@ function updateInteractionsPreview(modalEl, catalogos) {
   const interacciones = findInteractions(medicamentosFake, catalogos);
   preview.innerHTML = interacciones.length
     ? interacciones
-        .map((i) => `<div class="badge badge-warning" style="display:block; padding:10px; font-weight:400; font-size:12.5px; margin-bottom:6px;">⚠ Interacción detectada: ${escapeHtml(i.descripcion)}</div>`)
+        .map((i) => `<div class="badge badge-warning" style="display:flex; align-items:center; gap:6px; padding:10px; font-weight:400; font-size:12.5px; margin-bottom:6px;">${icon('alert-triangle', { size: 14 })} Interacción detectada: ${escapeHtml(i.descripcion)}</div>`)
         .join('')
     : '';
 }

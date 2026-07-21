@@ -1,4 +1,5 @@
 import { escapeHtml } from '../utils.js';
+import { icon } from '../icons.js';
 
 export function openModal({ title, bodyHtml, footerHtml = '', size = 'md', onMount, onClose }) {
   const overlay = document.createElement('div');
@@ -7,7 +8,7 @@ export function openModal({ title, bodyHtml, footerHtml = '', size = 'md', onMou
     <div class="modal${size === 'lg' ? ' modal-lg' : ''}" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div class="modal-header">
         <h2 id="modal-title">${escapeHtml(title)}</h2>
-        <button type="button" class="modal-close" aria-label="Cerrar">✕</button>
+        <button type="button" class="modal-close" aria-label="Cerrar">${icon('x', { size: 16 })}</button>
       </div>
       <div class="modal-body">${bodyHtml}</div>
       ${footerHtml ? `<div class="modal-footer">${footerHtml}</div>` : ''}

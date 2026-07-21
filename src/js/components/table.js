@@ -1,4 +1,5 @@
 import { debounce, escapeHtml } from '../utils.js';
+import { icon } from '../icons.js';
 
 /**
  * Tabla genérica filtrable/ordenable/paginada.
@@ -77,7 +78,7 @@ export function createTable({
         ${
           searchableKeys.length
             ? `<div class="table-search">
-                <span aria-hidden="true">🔍</span>
+                ${icon('search', { size: 16 })}
                 <input type="search" placeholder="${escapeHtml(searchPlaceholder)}" value="${escapeHtml(state.search)}" aria-label="${escapeHtml(searchPlaceholder)}" />
               </div>`
             : '<div></div>'

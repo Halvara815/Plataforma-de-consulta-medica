@@ -1,6 +1,7 @@
 import { navigateTo } from '../router.js';
 import { toggleSidebarMobile } from '../state.js';
 import { getTheme, toggleTheme } from '../theme.js';
+import { icon } from '../icons.js';
 
 const MOCK_NOTIFICATIONS = [
   { title: '5 resultados de laboratorio pendientes', time: 'Hace 1 hora' },
@@ -24,7 +25,7 @@ export function mountTopbar(container, { title = 'Panel General', subtitle = '' 
       </div>
     </div>
     <div class="topbar-search">
-      <span aria-hidden="true">🔍</span>
+      ${icon('search', { size: 16 })}
       <input type="search" id="topbar-search-input" placeholder="Buscar pacientes en el sistema…" aria-label="Buscar en el sistema" />
     </div>
     <div class="topbar-actions">

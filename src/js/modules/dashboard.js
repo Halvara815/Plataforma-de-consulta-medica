@@ -13,6 +13,7 @@ import {
   statusBadgeClass,
   statusLabel
 } from '../utils.js';
+import { icon } from '../icons.js';
 
 // Fecha ancla de la demo: las citas ficticias están concentradas en este día
 // para que el dashboard y la agenda muestren contenido representativo sin depender del reloj real.
@@ -49,11 +50,11 @@ export async function mount(container) {
       </div>
 
       <div class="card-grid">
-        ${metricCardHtml({ label: 'Citas de hoy', value: citasHoy.length, icon: '📅', trend: proximaCita ? `Próxima: ${proximaCita.horaInicio}` : 'Sin citas próximas', tone: 'primary' })}
-        ${metricCardHtml({ label: 'Pacientes activos', value: pacientesActivos.length, icon: '🧑‍⚕️', trend: `${pacientes.length} en total`, tone: 'accent' })}
-        ${metricCardHtml({ label: 'Seguimientos pendientes', value: alertasActivas.length, icon: '📋', trend: `${estudiosPendientes.length} estudio(s) en proceso`, tone: 'warning' })}
-        ${metricCardHtml({ label: 'Recetas emitidas', value: recetas.length, icon: '💊', trend: 'Acumulado de la demo', tone: 'success' })}
-        ${metricCardHtml({ label: 'Alertas clínicas', value: alertasActivas.length + estudiosPendientes.length, icon: '⚠️', trend: 'Requieren atención', tone: 'danger' })}
+        ${metricCardHtml({ label: 'Citas de hoy', value: citasHoy.length, icon: icon('calendar'), trend: proximaCita ? `Próxima: ${proximaCita.horaInicio}` : 'Sin citas próximas', tone: 'primary' })}
+        ${metricCardHtml({ label: 'Pacientes activos', value: pacientesActivos.length, icon: icon('users'), trend: `${pacientes.length} en total`, tone: 'accent' })}
+        ${metricCardHtml({ label: 'Seguimientos pendientes', value: alertasActivas.length, icon: icon('clipboard-list'), trend: `${estudiosPendientes.length} estudio(s) en proceso`, tone: 'warning' })}
+        ${metricCardHtml({ label: 'Recetas emitidas', value: recetas.length, icon: icon('pill'), trend: 'Acumulado de la demo', tone: 'success' })}
+        ${metricCardHtml({ label: 'Alertas clínicas', value: alertasActivas.length + estudiosPendientes.length, icon: icon('alert-triangle'), trend: 'Requieren atención', tone: 'danger' })}
       </div>
 
       <div class="two-col">
@@ -88,10 +89,10 @@ export async function mount(container) {
       <div class="card">
         <div class="card-header"><h2>Acciones rápidas</h2></div>
         <div class="card-grid">
-          <button type="button" class="btn btn-secondary" data-action="nuevo-paciente">➕ Nuevo paciente</button>
-          <button type="button" class="btn btn-secondary" data-action="nueva-consulta">🩺 Nueva consulta</button>
-          <button type="button" class="btn btn-secondary" data-action="receta">💊 Receta</button>
-          <button type="button" class="btn btn-secondary" data-action="documento">📤 Subir documento</button>
+          <button type="button" class="btn btn-secondary" data-action="nuevo-paciente">${icon('plus', { size: 15 })} Nuevo paciente</button>
+          <button type="button" class="btn btn-secondary" data-action="nueva-consulta">${icon('stethoscope', { size: 15 })} Nueva consulta</button>
+          <button type="button" class="btn btn-secondary" data-action="receta">${icon('pill', { size: 15 })} Receta</button>
+          <button type="button" class="btn btn-secondary" data-action="documento">${icon('upload', { size: 15 })} Subir documento</button>
         </div>
       </div>
     </div>
