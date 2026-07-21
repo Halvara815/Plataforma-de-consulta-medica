@@ -1,7 +1,7 @@
-import{e,j as g,s as b,q as v,i as x,c as y,k as $,f as r}from"./index-DOxX59Tn.js";import{c as f}from"./card-Bj6da6jR.js";function h({tabs:n,activeId:t,onChange:s,panelHtml:a}){const l=document.createElement("div");l.className="tabs-wrapper",i();function i(){const c=n.map(o=>`<button type="button" class="tab-btn${o.id===t?" is-active":""}" data-tab="${o.id}">${e(o.label)}</button>`).join("");l.innerHTML=`
+import{e,j as g,s as b,q as v,i as x,c as y,k as $,f as r}from"./index-CfR6KO86.js";import{c as f}from"./card-BvYCVBXz.js";function h({tabs:n,activeId:t,onChange:s,panelHtml:a}){const o=document.createElement("div");o.className="tabs-wrapper",i();function i(){const c=n.map(d=>`<button type="button" class="tab-btn${d.id===t?" is-active":""}" data-tab="${d.id}" role="tab" aria-selected="${d.id===t}">${e(d.label)}</button>`).join("");o.innerHTML=`
       <div class="tabs" role="tablist">${c}</div>
-      <div class="tab-panel">${a(t)}</div>
-    `,l.querySelectorAll(".tab-btn").forEach(o=>{o.addEventListener("click",()=>{o.dataset.tab!==t&&(t=o.dataset.tab,s&&s(t),i())})})}return{el:l,setActive(c){t=c,i()}}}let m=[];async function T(n,t={}){const s=g("pacientes",t.id);if(!s){n.innerHTML='<div class="empty-state">Paciente no encontrado.</div>';return}b("Historia Clínica","Registro clínico completo y longitudinal del paciente");const a=v("consultas",d=>d.pacienteId===s.id).sort((d,p)=>new Date(p.fecha)-new Date(d.fecha)),l=v("estudios",d=>d.pacienteId===s.id).sort((d,p)=>new Date(p.fecha)-new Date(d.fecha)),i=a[0]||null;n.innerHTML=`
+      <div class="tab-panel" role="tabpanel">${a(t)}</div>
+    `,o.querySelectorAll(".tab-btn").forEach(d=>{d.addEventListener("click",()=>{d.dataset.tab!==t&&(t=d.dataset.tab,s&&s(t),i())})})}return{el:o,setActive(c){t=c,i()}}}let m=[];async function T(n,t={}){const s=g("pacientes",t.id);if(!s){n.innerHTML='<div class="empty-state">Paciente no encontrado.</div>';return}b("Historia Clínica","Registro clínico completo y longitudinal del paciente");const a=v("consultas",l=>l.pacienteId===s.id).sort((l,p)=>new Date(p.fecha)-new Date(l.fecha)),o=v("estudios",l=>l.pacienteId===s.id).sort((l,p)=>new Date(p.fecha)-new Date(l.fecha)),i=a[0]||null;n.innerHTML=`
     <div class="view">
       <div class="view-header">
         <div>
@@ -23,7 +23,7 @@ import{e,j as g,s as b,q as v,i as x,c as y,k as $,f as r}from"./index-DOxX59Tn.
               <span class="badge">${e(s.sexo)}</span>
               <span class="badge badge-accent">Grupo ${e(s.grupoSanguineo)}</span>
               ${s.alergias.length?`<span class="badge badge-danger">Alergia a ${e(s.alergias[0].sustancia)}</span>`:""}
-              ${s.alertas.map(d=>`<span class="badge badge-warning">${e(d.tipo)}</span>`).join("")}
+              ${s.alertas.map(l=>`<span class="badge badge-warning">${e(l.tipo)}</span>`).join("")}
             </div>
           </div>
           <a class="btn btn-secondary btn-sm" href="#/pacientes/${s.id}">Ver ficha del paciente</a>
@@ -34,11 +34,11 @@ import{e,j as g,s as b,q as v,i as x,c as y,k as $,f as r}from"./index-DOxX59Tn.
         <div id="historia-tabs-container"></div>
         <div class="stack">
           ${f({title:"Línea de tiempo de consultas",bodyHtml:a.length?`<div class="timeline">
-                  ${a.map(d=>`
+                  ${a.map(l=>`
                     <div class="timeline-item">
-                      <div class="text-tertiary" style="font-size:11px;">${r(d.fecha,{withTime:!0})}</div>
-                      <div style="font-size:13px; font-weight:600;">${e(d.motivoConsulta)}</div>
-                      <div class="text-tertiary" style="font-size:11.5px;">${e(u(d.medicoId))}</div>
+                      <div class="text-tertiary" style="font-size:11px;">${r(l.fecha,{withTime:!0})}</div>
+                      <div style="font-size:13px; font-weight:600;">${e(l.motivoConsulta)}</div>
+                      <div class="text-tertiary" style="font-size:11.5px;">${e(u(l.medicoId))}</div>
                     </div>`).join("")}
                 </div>`:'<div class="empty-state">Sin consultas registradas.</div>'})}
           ${i?f({title:`Signos vitales (${r(i.fecha,{withTime:!0})})`,bodyHtml:`
@@ -56,7 +56,7 @@ import{e,j as g,s as b,q as v,i as x,c as y,k as $,f as r}from"./index-DOxX59Tn.
         </div>
       </div>
     </div>
-  `;const c=document.getElementById("historia-tabs-container"),o=h({tabs:[{id:"resumen",label:"Resumen"},{id:"antecedentes",label:"Antecedentes"},{id:"evolucion",label:"Evolución"},{id:"exploracion",label:"Exploración Física"},{id:"diagnosticos",label:"Diagnósticos"},{id:"tratamiento",label:"Tratamiento"},{id:"alergias",label:"Alergias"},{id:"vacunas",label:"Vacunas"},{id:"estudios",label:"Estudios"}],activeId:"resumen",panelHtml:d=>z(d,s,a,i,l)});c.appendChild(w(o.el))}function w(n){const t=document.createElement("div");return t.className="card",t.appendChild(n),t}function u(n){const t=g("medicos",n);return t?t.nombre:""}function z(n,t,s,a,l){if(!a&&n!=="alergias"&&n!=="estudios"&&n!=="vacunas")return'<div class="empty-state">Aún no hay consultas registradas para este paciente.</div>';switch(n){case"resumen":return`
+  `;const c=document.getElementById("historia-tabs-container"),d=h({tabs:[{id:"resumen",label:"Resumen"},{id:"antecedentes",label:"Antecedentes"},{id:"evolucion",label:"Evolución"},{id:"exploracion",label:"Exploración Física"},{id:"diagnosticos",label:"Diagnósticos"},{id:"tratamiento",label:"Tratamiento"},{id:"alergias",label:"Alergias"},{id:"vacunas",label:"Vacunas"},{id:"estudios",label:"Estudios"}],activeId:"resumen",panelHtml:l=>z(l,s,a,i,o)});c.appendChild(w(d.el))}function w(n){const t=document.createElement("div");return t.className="card",t.appendChild(n),t}function u(n){const t=g("medicos",n);return t?t.nombre:""}function z(n,t,s,a,o){if(!a&&n!=="alergias"&&n!=="estudios"&&n!=="vacunas")return'<div class="empty-state">Aún no hay consultas registradas para este paciente.</div>';switch(n){case"resumen":return`
         <div class="card-grid">
           <div class="card"><h3 style="font-size:13px; margin-bottom:8px;">Antecedentes heredofamiliares</h3><p style="font-size:13px;">${e(a.antecedentes.heredofamiliares||"Sin información")}</p></div>
           <div class="card"><h3 style="font-size:13px; margin-bottom:8px;">Antecedentes personales patológicos</h3><p style="font-size:13px;">${e(a.antecedentes.personalesPatologicos||"Sin información")}</p></div>
@@ -103,8 +103,8 @@ import{e,j as g,s as b,q as v,i as x,c as y,k as $,f as r}from"./index-DOxX59Tn.
                 <div style="font-size:13px; font-weight:600;">${e(i.sustancia)}</div>
                 <div class="text-tertiary" style="font-size:12px;">Reacción: ${e(i.reaccion)}</div>
               </div>`).join("")}
-          </div>`:'<div class="empty-state">Sin alergias registradas.</div>';case"vacunas":return'<div class="empty-state">Sin registros de vacunación cargados en esta demo.</div>';case"estudios":return l.length?`<div class="stack">
-            ${l.map(i=>`
+          </div>`:'<div class="empty-state">Sin alergias registradas.</div>';case"vacunas":return'<div class="empty-state">Sin registros de vacunación cargados en esta demo.</div>';case"estudios":return o.length?`<div class="stack">
+            ${o.map(i=>`
               <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);">
                 <div>
                   <div style="font-size:13px; font-weight:600;">${e(i.estudiosSolicitados.join(", "))}</div>

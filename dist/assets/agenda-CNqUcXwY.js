@@ -1,4 +1,4 @@
-import{s as w,i as E,o as h,g as v,e as s,b as p,j as y,a as b,f as x,u as C,m as H}from"./index-DOxX59Tn.js";import{c as m}from"./card-Bj6da6jR.js";import{o as L}from"./modal-CJgasGep.js";import{s as f,t as r,v as B,g as T}from"./form-BIA96B2r.js";const u="2026-07-20",M=24*60*60*1e3;let I=[],a={date:u,medicoId:"",consultorio:"",estado:"",selectedCitaId:null};async function G(e,o={},t={}){w("Agenda / Citas","Gestione y programe las citas de sus pacientes"),a={date:u,medicoId:"",consultorio:"",estado:"",selectedCitaId:null},e.innerHTML=`
+import{s as w,i as E,o as h,g as v,e as s,b as p,j as y,a as b,f as x,u as C,m as H}from"./index-CfR6KO86.js";import{c as m}from"./card-BvYCVBXz.js";import{o as L}from"./modal-BH9WQggy.js";import{s as f,t as r,v as B,g as T}from"./form-L0qYvfTg.js";const u="2026-07-20",M=24*60*60*1e3;let I=[],a={date:u,medicoId:"",consultorio:"",estado:"",selectedCitaId:null};async function G(e,o={},t={}){w("Agenda / Citas","Gestione y programe las citas de sus pacientes"),a={date:u,medicoId:"",consultorio:"",estado:"",selectedCitaId:null},e.innerHTML=`
     <div class="view">
       <div class="view-header">
         <div>

@@ -1,4 +1,4 @@
-import{j as b,s as E,o as w,c as S,e as l,k as F,i as T,n as y,m as M,p as $}from"./index-DOxX59Tn.js";import{t as n,a as r,v as P,g as D}from"./form-BIA96B2r.js";let u=[],m=null;async function N(s,o={}){const a=b("pacientes",o.id);if(!a){s.innerHTML='<div class="empty-state">Paciente no encontrado.</div>';return}E("Consulta médica",`${a.nombre} ${a.apellidos}`);const i=w(),c=b("medicos","MED-0001"),d=Date.now();s.innerHTML=`
+import{j as b,s as E,o as w,c as S,e as l,k as F,i as T,n as y,m as M,p as $}from"./index-CfR6KO86.js";import{t as n,a as r,v as P,g as D}from"./form-L0qYvfTg.js";let u=[],m=null;async function N(s,o={}){const a=b("pacientes",o.id);if(!a){s.innerHTML='<div class="empty-state">Paciente no encontrado.</div>';return}E("Consulta médica",`${a.nombre} ${a.apellidos}`);const i=w(),c=b("medicos","MED-0001"),d=Date.now();s.innerHTML=`
     <div class="view">
       <div class="view-header">
         <div>

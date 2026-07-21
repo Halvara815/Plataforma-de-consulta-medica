@@ -1,13 +1,17 @@
 import { appState, toggleSidebarCollapsed, toggleSidebarMobile } from '../state.js';
+import { getAll } from '../services/dataService.js';
 import { initials } from '../utils.js';
 import { icon } from '../icons.js';
+import logoUrl from '../../assets/logo.webp';
+
+const PATIENT_CONTEXT_ROUTES = ['pacientes', 'historiaClinica', 'consulta'];
 
 const NAV_ITEMS = [
-  { route: 'dashboard', path: '#/dashboard', label: 'Dashboard', icon: 'dashboard' },
+  { route: 'dashboard', path: '#/dashboard', label: 'Dashboard', icon: 'home' },
   { route: 'pacientes', path: '#/pacientes', label: 'Pacientes', icon: 'patients' },
-  { route: 'historiaClinica', path: '#/pacientes', label: 'Historia Clínica', icon: 'history' },
+  { route: 'historiaClinica', label: 'Historia Clínica', icon: 'history' },
   { route: 'agenda', path: '#/agenda', label: 'Citas / Agenda', icon: 'calendar' },
-  { route: 'recetas', path: '#/recetas', label: 'Prescripciones', icon: 'pill' },
+  { route: 'recetas', path: '#/recetas', label: 'Prescripciones', icon: 'prescription' },
   { route: 'documentos', path: '#/documentos', label: 'Imágenes / Documentos', icon: 'documents' },
   { route: 'reportes', path: '#/reportes', label: 'Reportes', icon: 'reports' },
   { route: 'calculadora', path: '#/calculadora', label: 'Calculadora', icon: 'calculator' },
@@ -17,19 +21,30 @@ const NAV_ITEMS = [
 
 export function mountSidebar(container) {
   function render() {
-    const { route, currentUser, sidebarCollapsed } = appState.getState();
+    const { route, currentUser, sidebarCollapsed, dataReady } = appState.getState();
     const activeName = route?.name;
+    const contextPatientId = PATIENT_CONTEXT_ROUTES.includes(activeName) && route?.params?.id
+      ? route.params.id
+      : dataReady
+        ? getAll('pacientes')[0]?.id
+        : undefined;
+
+    const navItems = NAV_ITEMS.map((item) =>
+      item.route === 'historiaClinica'
+        ? { ...item, path: contextPatientId ? `#/historia-clinica/${contextPatientId}` : '#/pacientes' }
+        : item
+    );
 
     container.innerHTML = `
       <div class="sidebar-brand">
-        <span class="sidebar-brand-icon">${icon('heart', { size: 20 })}</span>
+        <span class="sidebar-brand-icon"><img src="${logoUrl}" alt="" /></span>
         <div class="sidebar-brand-text">
           <strong>Consulta Práctica</strong>
           <span>EMR / EHR · Demo local</span>
         </div>
       </div>
       <nav class="sidebar-nav" aria-label="Navegación principal">
-        ${NAV_ITEMS.map(
+        ${navItems.map(
           (item) => `
           <a class="sidebar-link${item.route === activeName ? ' is-active' : ''}" href="${item.path}" data-route="${item.route}">
             ${icon(item.icon, { size: 20 })}

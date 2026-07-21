@@ -135,16 +135,16 @@ export async function mount(container, params = {}, query = {}) {
                 ${icon('search', { size: 16 })}
                 <input type="search" id="doc-search" placeholder="Buscar archivos por nombre, categoría o etiqueta…" />
               </div>
-              <div class="view-toggle">
-                <button type="button" data-view="list" class="is-active" aria-label="Vista de lista">${icon('list', { size: 16 })}</button>
-                <button type="button" data-view="grid" aria-label="Vista de cuadrícula">${icon('grid', { size: 16 })}</button>
+              <div class="view-toggle" role="group" aria-label="Cambiar vista">
+                <button type="button" data-view="list" class="is-active" aria-label="Vista de lista" aria-pressed="true">${icon('list', { size: 16 })}</button>
+                <button type="button" data-view="grid" aria-label="Vista de cuadrícula" aria-pressed="false">${icon('grid', { size: 16 })}</button>
               </div>
             </div>
             <div class="tabs" role="tablist" id="doc-type-tabs">
               ${['todos', 'imagen', 'documento', 'nota']
                 .map(
                   (t) =>
-                    `<button type="button" class="tab-btn${t === state.tipo ? ' is-active' : ''}" data-tipo="${t}">${t === 'todos' ? 'Todos' : t === 'imagen' ? 'Imágenes' : t === 'documento' ? 'Documentos' : 'Notas'}</button>`
+                    `<button type="button" class="tab-btn${t === state.tipo ? ' is-active' : ''}" data-tipo="${t}" role="tab" aria-selected="${t === state.tipo}">${t === 'todos' ? 'Todos' : t === 'imagen' ? 'Imágenes' : t === 'documento' ? 'Documentos' : 'Notas'}</button>`
                 )
                 .join('')}
             </div>
@@ -201,7 +201,11 @@ export async function mount(container, params = {}, query = {}) {
   document.getElementById('doc-type-tabs').addEventListener('click', (e) => {
     if (!e.target.matches('[data-tipo]')) return;
     state.tipo = e.target.dataset.tipo;
-    document.querySelectorAll('#doc-type-tabs .tab-btn').forEach((b) => b.classList.toggle('is-active', b === e.target));
+    document.querySelectorAll('#doc-type-tabs .tab-btn').forEach((b) => {
+      const isActive = b === e.target;
+      b.classList.toggle('is-active', isActive);
+      b.setAttribute('aria-selected', String(isActive));
+    });
     render();
   });
   document.getElementById('f-categoria-filter').addEventListener('change', (e) => {
@@ -211,7 +215,11 @@ export async function mount(container, params = {}, query = {}) {
   document.querySelectorAll('.view-toggle [data-view]').forEach((btn) => {
     btn.addEventListener('click', () => {
       state.view = btn.dataset.view;
-      document.querySelectorAll('.view-toggle [data-view]').forEach((b) => b.classList.toggle('is-active', b === btn));
+      document.querySelectorAll('.view-toggle [data-view]').forEach((b) => {
+        const isActive = b === btn;
+        b.classList.toggle('is-active', isActive);
+        b.setAttribute('aria-pressed', String(isActive));
+      });
       renderList(getFilteredDocs());
     });
   });

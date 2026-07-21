@@ -13,12 +13,12 @@ export function createTabs({ tabs, activeId, onChange, panelHtml }) {
     const tabsHtml = tabs
       .map(
         (tab) =>
-          `<button type="button" class="tab-btn${tab.id === activeId ? ' is-active' : ''}" data-tab="${tab.id}">${escapeHtml(tab.label)}</button>`
+          `<button type="button" class="tab-btn${tab.id === activeId ? ' is-active' : ''}" data-tab="${tab.id}" role="tab" aria-selected="${tab.id === activeId}">${escapeHtml(tab.label)}</button>`
       )
       .join('');
     wrapper.innerHTML = `
       <div class="tabs" role="tablist">${tabsHtml}</div>
-      <div class="tab-panel">${panelHtml(activeId)}</div>
+      <div class="tab-panel" role="tabpanel">${panelHtml(activeId)}</div>
     `;
     wrapper.querySelectorAll('.tab-btn').forEach((btn) => {
       btn.addEventListener('click', () => {

@@ -1,4 +1,4 @@
-import{e as d}from"./index-DOxX59Tn.js";function e({label:a,value:c,icon:s="",trend:r="",trendDirection:l="",tone:i="primary"}){const o=l?` ${l}`:"";return`
+import{e as d}from"./index-CfR6KO86.js";function e({label:a,value:c,icon:s="",trend:r="",trendDirection:l="",tone:i="primary"}){const o=l?` ${l}`:"";return`
     <div class="card metric-card">
       <div class="metric-label">
         <span class="metric-icon badge-${i}" style="background:var(--color-${i}-soft, var(--color-primary-soft)); color:var(--color-${i}, var(--color-primary));">${s}</span>
