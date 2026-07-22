@@ -1,4 +1,4 @@
-import{s as w,i as E,o as h,g as v,e as s,b as p,j as y,a as b,f as x,u as C,m as H}from"./index-HXJRJ7id.js";import{c as m}from"./card-DyJCkSMh.js";import{o as L}from"./modal-BHhV6Xsj.js";import{s as f,t as r,v as B,g as T}from"./form-xX5eYAiU.js";const u="2026-07-20",M=24*60*60*1e3;let I=[],a={date:u,medicoId:"",consultorio:"",estado:"",selectedCitaId:null};async function G(e,o={},t={}){w("Agenda / Citas","Gestione y programe las citas de sus pacientes"),a={date:u,medicoId:"",consultorio:"",estado:"",selectedCitaId:null},e.innerHTML=`
+import{s as w,i as E,o as h,g as v,e as s,b as p,j as y,a as b,f as x,u as C,m as H}from"./index-kGilWOpK.js";import{c as m}from"./card-DxPzD0eG.js";import{o as L}from"./modal-C8_1gc2H.js";import{s as f,t as r,v as B,g as T}from"./form-ORHtGPKz.js";const u="2026-07-20",M=24*60*60*1e3;let I=[],a={date:u,medicoId:"",consultorio:"",estado:"",selectedCitaId:null};async function G(e,o={},t={}){w("Agenda / Citas","Gestione y programe las citas de sus pacientes"),a={date:u,medicoId:"",consultorio:"",estado:"",selectedCitaId:null},e.innerHTML=`
     <div class="view">
       <div class="view-header">
         <div>

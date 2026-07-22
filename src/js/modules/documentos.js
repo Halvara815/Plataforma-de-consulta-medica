@@ -389,6 +389,7 @@ function renderViewer(doc) {
 
   viewerEl.innerHTML = cardHtml({
     title: doc.nombre,
+    headerClass: 'is-stacked',
     actionsHtml: `
       <button type="button" class="btn btn-secondary btn-sm" id="btn-descargar-doc">${icon('download', { size: 14 })} Descargar</button>
       <button type="button" class="btn btn-secondary btn-sm" id="btn-editar-doc">${icon('edit', { size: 14 })} Editar</button>

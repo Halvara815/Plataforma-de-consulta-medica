@@ -485,6 +485,19 @@ img {
   font-weight: 700;
 }
 
+/* Variante para encabezados con muchas acciones (ej. visor de archivos):
+   el título queda en su propia fila y las acciones debajo, en vez de compartir fila. */
+.card-header.is-stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: var(--space-3);
+}
+
+.card-header.is-stacked h2 {
+  overflow-wrap: anywhere;
+}
+
 .card-grid {
   display: grid;
   gap: var(--space-4);

@@ -14,12 +14,13 @@ export function metricCardHtml({ label, value, icon = '', trend = '', trendDirec
   `;
 }
 
-export function cardHtml({ title, actionsHtml = '', bodyHtml = '', id = '' }) {
+export function cardHtml({ title, actionsHtml = '', bodyHtml = '', id = '', headerClass = '' }) {
+  const headerClasses = ['card-header', headerClass].filter(Boolean).join(' ');
   return `
     <section class="card"${id ? ` id="${id}"` : ''}>
       ${
         title
-          ? `<div class="card-header"><h2>${escapeHtml(title)}</h2>${actionsHtml ? `<div class="view-actions">${actionsHtml}</div>` : ''}</div>`
+          ? `<div class="${headerClasses}"><h2>${escapeHtml(title)}</h2>${actionsHtml ? `<div class="view-actions">${actionsHtml}</div>` : ''}</div>`
           : ''
       }
       ${bodyHtml}
