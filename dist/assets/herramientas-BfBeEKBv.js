@@ -1,4 +1,4 @@
-import{i as k,y as me,z as be,e as ke,f as zn,g as Si,w as $t,s as Ii}from"./index-CfR6KO86.js";import{c as Oi}from"./sectionNav-CN3PA3db.js";import{s as De}from"./toast-DAoH9M8M.js";const ht="herramientas_notas";function Ti(r){r.innerHTML=`
+import{i as k,y as me,z as be,e as ke,f as zn,g as Si,w as $t,s as Ii}from"./index-HXJRJ7id.js";import{c as Oi}from"./sectionNav-Cke18PBE.js";import{s as De}from"./toast-DAoH9M8M.js";const ht="herramientas_notas";function Ti(r){r.innerHTML=`
     <div class="card">
       <div class="card-header"><h2>Nueva nota</h2></div>
       <div class="form-field">

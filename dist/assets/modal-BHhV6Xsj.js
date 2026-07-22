@@ -1,4 +1,4 @@
-import{e as u,i as v}from"./index-CfR6KO86.js";function f({title:r,bodyHtml:s,footerHtml:t="",size:m="md",onMount:a,onClose:i}){const e=document.createElement("div");e.className="modal-overlay",e.innerHTML=`
+import{e as u,i as v}from"./index-HXJRJ7id.js";function f({title:r,bodyHtml:s,footerHtml:t="",size:m="md",onMount:a,onClose:i}){const e=document.createElement("div");e.className="modal-overlay",e.innerHTML=`
     <div class="modal${m==="lg"?" modal-lg":""}" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div class="modal-header">
         <h2 id="modal-title">${u(r)}</h2>

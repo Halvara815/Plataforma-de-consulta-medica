@@ -1,4 +1,4 @@
-import{s as g,g as d,i as c,l as h,d as y,e as f,h as b,b as x,j as $}from"./index-CfR6KO86.js";import{m as l,c as p}from"./card-BvYCVBXz.js";let u=[];async function T(o){g("Reportes","Indicadores clínicos, productividad y estadísticas de la clínica");const i=d("pacientes"),t=d("consultas"),n=d("recetas"),e=d("citas"),s=d("estudios");o.innerHTML=`
+import{s as g,g as d,i as c,l as h,d as y,e as f,h as b,b as x,j as $}from"./index-HXJRJ7id.js";import{m as l,c as p}from"./card-DyJCkSMh.js";let u=[];async function T(o){g("Reportes","Indicadores clínicos, productividad y estadísticas de la clínica");const i=d("pacientes"),t=d("consultas"),n=d("recetas"),e=d("citas"),s=d("estudios");o.innerHTML=`
     <div class="view">
       <div class="view-header">
         <div>

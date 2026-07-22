@@ -1,4 +1,4 @@
-import{e as l}from"./index-CfR6KO86.js";function f({name:e,label:s,value:a="",type:r="text",required:t=!1,span2:i=!1,placeholder:n="",hint:o=""}){return`
+import{e as l}from"./index-HXJRJ7id.js";function f({name:e,label:s,value:a="",type:r="text",required:t=!1,span2:i=!1,placeholder:n="",hint:o=""}){return`
     <div class="form-field${i?" span-2":""}">
       <label for="f-${e}">${l(s)}${t?" *":""}</label>
       <input class="input" id="f-${e}" name="${e}" type="${r}" value="${l(a)}" placeholder="${l(n)}" ${t?"required":""} />

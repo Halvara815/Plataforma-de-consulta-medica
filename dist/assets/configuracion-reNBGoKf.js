@@ -1,4 +1,4 @@
-import{s as u,t as m,A as v,B as f,i as r,C as b,D as g,S as y,E as x,F as h}from"./index-CfR6KO86.js";import{c as d}from"./card-BvYCVBXz.js";let c=[];async function $(s){u("Configuración","Preferencias de interfaz, respaldo local y datos de la demo");const{currentUser:a}=m.getState(),p=v();s.innerHTML=`
+import{s as u,t as m,A as v,B as f,i as r,C as b,D as g,S as y,E as x,F as h}from"./index-HXJRJ7id.js";import{c as d}from"./card-DyJCkSMh.js";let c=[];async function $(s){u("Configuración","Preferencias de interfaz, respaldo local y datos de la demo");const{currentUser:a}=m.getState(),p=v();s.innerHTML=`
     <div class="view">
       <div class="view-header">
         <div>
