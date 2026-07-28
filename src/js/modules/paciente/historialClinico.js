@@ -2,8 +2,8 @@ import { query as queryCollection } from '../../services/dataService.js';
 import { escapeHtml } from '../../utils.js';
 import { icon } from '../../icons.js';
 
-export function render(paciente, panelEl) {
-  const consultas = queryCollection('consultas', (c) => c.pacienteId === paciente.id).sort(
+export async function render(paciente, panelEl) {
+  const consultas = (await queryCollection('consultas', (c) => c.pacienteId === paciente.id)).sort(
     (a, b) => new Date(b.fecha) - new Date(a.fecha)
   );
   const ultima = consultas[0];

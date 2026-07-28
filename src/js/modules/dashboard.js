@@ -25,11 +25,13 @@ let cleanupFns = [];
 export async function mount(container) {
   setTopbarTitle('Panel General', 'Resumen de la actividad clínica de hoy');
 
-  const pacientes = getAll('pacientes');
-  const citas = getAll('citas');
-  const consultas = getAll('consultas');
-  const recetas = getAll('recetas');
-  const estudios = getAll('estudios');
+  const [pacientes, citas, consultas, recetas, estudios] = await Promise.all([
+    getAll('pacientes'),
+    getAll('citas'),
+    getAll('consultas'),
+    getAll('recetas'),
+    getAll('estudios')
+  ]);
 
   const citasHoy = citas.filter((c) => c.fecha === DEMO_TODAY).sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
   const proximaCita = citasHoy.find((c) => c.pacienteId);

@@ -1,4 +1,4 @@
-import { getLocal, setLocal } from '../../storage.js';
+import { getLocal, setLocal } from '../../utils.js';
 import { showToast } from '../../components/toast.js';
 import { icon } from '../../icons.js';
 

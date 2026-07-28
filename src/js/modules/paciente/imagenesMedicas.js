@@ -2,8 +2,8 @@ import { query as queryCollection } from '../../services/dataService.js';
 import { escapeHtml, formatDate } from '../../utils.js';
 import { icon } from '../../icons.js';
 
-export function render(paciente, panelEl) {
-  const imagenes = queryCollection('documentos', (d) => d.pacienteId === paciente.id && d.tipo === 'imagen').sort(
+export async function render(paciente, panelEl) {
+  const imagenes = (await queryCollection('documentos', (d) => d.pacienteId === paciente.id && d.tipo === 'imagen')).sort(
     (a, b) => new Date(b.fecha) - new Date(a.fecha)
   );
 

@@ -5,7 +5,7 @@ import { escapeHtml, formatDate } from '../../utils.js';
 import { icon } from '../../icons.js';
 import { showToast } from '../../components/toast.js';
 
-export function render(paciente, panelEl, ctx = {}) {
+export async function render(paciente, panelEl, ctx = {}) {
   const referencias = [...(paciente.referencias || [])].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
   panelEl.innerHTML = `

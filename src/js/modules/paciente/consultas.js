@@ -3,12 +3,12 @@ import { escapeHtml, formatDate } from '../../utils.js';
 import { icon } from '../../icons.js';
 
 function medicoNombre(medicoId) {
-  const medico = getById('medicos', medicoId);
+  const medico = await getById('medicos', medicoId);
   return medico ? medico.nombre : '';
 }
 
-export function render(paciente, panelEl) {
-  const consultas = queryCollection('consultas', (c) => c.pacienteId === paciente.id).sort(
+export async function render(paciente, panelEl) {
+  const consultas = (await queryCollection('consultas', (c) => c.pacienteId === paciente.id)).sort(
     (a, b) => new Date(b.fecha) - new Date(a.fecha)
   );
 

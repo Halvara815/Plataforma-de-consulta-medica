@@ -1,11 +1,11 @@
 import { query as queryCollection } from '../../services/dataService.js';
 import { escapeHtml, formatDate, statusBadgeClass, statusLabel } from '../../utils.js';
 
-export function render(paciente, panelEl) {
-  const estudios = queryCollection(
+export async function render(paciente, panelEl) {
+  const estudios = (await queryCollection(
     'estudios',
     (e) => e.pacienteId === paciente.id && e.tipoEstudio === 'laboratorio'
-  ).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+  )).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
   panelEl.innerHTML = `
     <div class="card">

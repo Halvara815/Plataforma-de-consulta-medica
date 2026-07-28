@@ -1,4 +1,23 @@
 let idCounters = {};
+const LOCAL_PREFIX = 'cp_ui_';
+
+export function getLocal(key, fallback = null) {
+  try {
+    const raw = localStorage.getItem(LOCAL_PREFIX + key);
+    if (raw === null) return fallback;
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+export function setLocal(key, value) {
+  try {
+    localStorage.setItem(LOCAL_PREFIX + key, JSON.stringify(value));
+  } catch {
+    // Ignored if local storage not available
+  }
+}
 
 export function generateId(prefix) {
   const key = prefix;

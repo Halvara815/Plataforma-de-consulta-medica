@@ -48,7 +48,7 @@ let activeSectionNav = null;
 export async function mount(container, params = {}, query = {}) {
   setTopbarTitle('Pacientes', 'Consulta, gestiona y mantén la información clínica de tus pacientes');
 
-  const pacientes = getAll('pacientes');
+  const pacientes = await getAll('pacientes');
   const searchTerm = query.q || '';
   const filtered = searchTerm
     ? pacientes.filter((p) =>
@@ -57,7 +57,7 @@ export async function mount(container, params = {}, query = {}) {
     : pacientes;
 
   const selectedId = params.id || (filtered[0] || pacientes[0])?.id;
-  const paciente = selectedId ? getById('pacientes', selectedId) : null;
+  const paciente = selectedId ? await getById('pacientes', selectedId) : null;
 
   container.innerHTML = `
     <div class="view">
@@ -186,7 +186,7 @@ function renderDetail(paciente) {
 
   const ctx = {
     refresh() {
-      const fresh = getById('pacientes', paciente.id);
+      const fresh = await getById('pacientes', paciente.id);
       const previousActive = activeSectionNav?.getActive();
       renderDetail(fresh);
       if (previousActive && activeSectionNav) activeSectionNav.setActive(previousActive);
@@ -200,7 +200,7 @@ function renderDetail(paciente) {
     ariaLabel: 'Secciones del expediente del paciente',
     renderPanel: (id, panelEl) => {
       const section = SECTIONS.find((s) => s.id === id);
-      const fresh = getById('pacientes', paciente.id) || paciente;
+      const fresh = await getById('pacientes', paciente.id) || paciente;
       return section.mod.render(fresh, panelEl, ctx);
     }
   });
@@ -214,19 +214,22 @@ function renderTimeline(paciente) {
     return;
   }
 
-  const consultas = queryCollection('consultas', (c) => c.pacienteId === paciente.id).map((c) => ({
+  const consultasFetch = await queryCollection('consultas', (c) => c.pacienteId === paciente.id);
+  const consultas = consultasFetch.map((c) => ({
     date: c.fecha,
     label: `Consulta: ${c.motivoConsulta}`,
     badge: 'Consulta',
     tone: 'badge-primary'
   }));
-  const recetas = queryCollection('recetas', (r) => r.pacienteId === paciente.id).map((r) => ({
+  const recetasFetch = await queryCollection('recetas', (r) => r.pacienteId === paciente.id);
+  const recetas = recetasFetch.map((r) => ({
     date: r.fecha,
     label: `Receta ${r.folio}`,
     badge: 'Prescripción',
     tone: 'badge-accent'
   }));
-  const documentos = queryCollection('documentos', (d) => d.pacienteId === paciente.id).map((d) => ({
+  const documentosFetch = await queryCollection('documentos', (d) => d.pacienteId === paciente.id);
+  const documentos = documentosFetch.map((d) => ({
     date: d.fecha,
     label: d.nombre,
     badge: 'Documento',
@@ -257,7 +260,12 @@ function renderTimeline(paciente) {
   });
 }
 
-function openNuevoPacienteModal() {
+async function openNuevoPacienteModal() {
+  const [pacientes, medicos, catalogos] = await Promise.all([
+    getAll('pacientes'),
+    getAll('medicos'),
+    getCatalogos()
+  ]);
   const bodyHtml = `
     <form id="form-nuevo-paciente" class="form-grid">
       ${textField({ name: 'nombre', label: 'Nombre(s)', required: true })}

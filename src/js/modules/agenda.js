@@ -61,27 +61,27 @@ export async function mount(container, params = {}, query = {}) {
     </div>
   `;
 
-  populateFilters();
-  render();
+  await populateFilters();
+  await render();
 
   document.getElementById('btn-nueva-cita').addEventListener('click', openNuevaCitaModal);
-  document.getElementById('agenda-date-input').addEventListener('change', (e) => {
+  document.getElementById('agenda-date-input').addEventListener('change', async (e) => {
     state.date = e.target.value;
     state.selectedCitaId = null;
-    render();
+    await render();
   });
   document.getElementById('btn-prev-day').addEventListener('click', () => shiftDay(-1));
   document.getElementById('btn-next-day').addEventListener('click', () => shiftDay(1));
-  document.getElementById('btn-today').addEventListener('click', () => {
+  document.getElementById('btn-today').addEventListener('click', async () => {
     state.date = DEMO_TODAY;
     document.getElementById('agenda-date-input').value = DEMO_TODAY;
-    render();
+    await render();
   });
   ['filter-medico', 'filter-consultorio', 'filter-estado'].forEach((id) => {
-    document.getElementById(id).addEventListener('change', (e) => {
+    document.getElementById(id).addEventListener('change', async (e) => {
       const key = id === 'filter-medico' ? 'medicoId' : id === 'filter-consultorio' ? 'consultorio' : 'estado';
       state[key] = e.target.value;
-      render();
+      await render();
     });
   });
 
@@ -90,18 +90,18 @@ export async function mount(container, params = {}, query = {}) {
   }
 }
 
-function shiftDay(delta) {
+async function shiftDay(delta) {
   const d = new Date(`${state.date}T00:00:00`);
   d.setTime(d.getTime() + delta * DAY_MS);
   state.date = d.toISOString().slice(0, 10);
   document.getElementById('agenda-date-input').value = state.date;
   state.selectedCitaId = null;
-  render();
+  await render();
 }
 
-function populateFilters() {
-  const catalogos = getCatalogos();
-  const medicos = getAll('medicos');
+async function populateFilters() {
+  const catalogos = await getCatalogos();
+  const medicos = await getAll('medicos');
 
   const medicoSelect = document.getElementById('filter-medico');
   medicoSelect.innerHTML =
@@ -118,8 +118,9 @@ function populateFilters() {
     catalogos.estadosCita.map((s) => `<option value="${s}">${statusLabel(s)}</option>`).join('');
 }
 
-function getFilteredCitas() {
-  return getAll('citas')
+async function getFilteredCitas() {
+  const allCitas = await getAll('citas');
+  return allCitas
     .filter((c) => c.fecha === state.date)
     .filter((c) => !state.medicoId || c.medicoId === state.medicoId)
     .filter((c) => !state.consultorio || c.consultorioId === state.consultorio)
@@ -128,30 +129,40 @@ function getFilteredCitas() {
     .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
 }
 
-function render() {
-  const citas = getFilteredCitas();
+async function render() {
+  const citas = await getFilteredCitas();
   if (!state.selectedCitaId || !citas.some((c) => c.id === state.selectedCitaId)) {
     state.selectedCitaId = citas.find((c) => c.pacienteId)?.id || citas[0]?.id || null;
   }
-  renderList(citas);
-  renderDetail(citas.find((c) => c.id === state.selectedCitaId));
+  await renderList(citas);
+  await renderDetail(citas.find((c) => c.id === state.selectedCitaId));
   renderSummary(citas);
 }
 
-function renderList(citas) {
+async function renderList(citas) {
   const el = document.getElementById('agenda-list-container');
+  const listHtmlPromises = citas
+    .map(async (cita) => {
+      const paciente = cita.pacienteId ? await getById('pacientes', cita.pacienteId) : null;
+      const label = paciente ? `${paciente.nombre} ${paciente.apellidos}` : cita.motivo;
+      return `
+        <div class="patient-directory-item${cita.id === state.selectedCitaId ? ' is-active' : ''}" data-cita-id="${cita.id}" style="justify-content:space-between;">
+          <div style="display:flex; gap:12px; align-items:center; min-width:0;">
+            <strong style="min-width:48px; font-size:12.5px; color:var(--text-secondary);">${cita.horaInicio}</strong>
+            <div style="min-width:0;">
+              <div style="font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(label)}</div>
+              <div class="text-tertiary" style="font-size:11.5px;">${escapeHtml(paciente ? cita.motivo : cita.consultorioId)}</div>
+            </div>
+          </div>
+          <span class="badge ${statusBadgeClass(cita.estado)}">${statusLabel(cita.estado)}</span>
+        </div>
+      `;
+    });
+  const listHtml = await Promise.all(listHtmlPromises);
+
   el.innerHTML = cardHtml({
     title: `Agenda · ${formatDate(state.date)}`,
     bodyHtml: citas.length
-      ? `<div class="stack" id="agenda-list">${citas
-          .map((cita) => {
-            const paciente = cita.pacienteId ? getById('pacientes', cita.pacienteId) : null;
-            const label = paciente ? `${paciente.nombre} ${paciente.apellidos}` : cita.motivo;
-            return `
-              <div class="patient-directory-item${cita.id === state.selectedCitaId ? ' is-active' : ''}" data-cita-id="${cita.id}" style="justify-content:space-between;">
-                <div style="display:flex; gap:12px; align-items:center; min-width:0;">
-                  <strong style="min-width:48px; font-size:12.5px; color:var(--text-secondary);">${cita.horaInicio}</strong>
-                  <div style="min-width:0;">
                     <div style="font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(label)}</div>
                     <div class="text-tertiary" style="font-size:11.5px;">${escapeHtml(paciente ? cita.motivo : cita.consultorioId)}</div>
                   </div>
@@ -159,27 +170,28 @@ function renderList(citas) {
                 <span class="badge ${statusBadgeClass(cita.estado)}">${statusLabel(cita.estado)}</span>
               </div>
             `;
-          })
-          .join('')}</div>`
+          });
+        const listHtml = await Promise.all(listHtmlPromises);
+        return `<div class="stack" id="agenda-list">${listHtml.join('')}</div>`;
       : '<div class="empty-state">No hay citas para esta fecha con los filtros seleccionados.</div>'
   });
 
   el.querySelectorAll('[data-cita-id]').forEach((row) => {
     row.addEventListener('click', () => {
       state.selectedCitaId = row.dataset.citaId;
-      render();
+      await render();
     });
   });
 }
 
-function renderDetail(cita) {
+async function renderDetail(cita) {
   const el = document.getElementById('agenda-detail-container');
   if (!cita) {
     el.innerHTML = cardHtml({ title: 'Detalle de la cita', bodyHtml: '<div class="empty-state">Selecciona una cita.</div>' });
     return;
   }
-  const paciente = cita.pacienteId ? getById('pacientes', cita.pacienteId) : null;
-  const medico = getById('medicos', cita.medicoId);
+  const paciente = cita.pacienteId ? await getById('pacientes', cita.pacienteId) : null;
+  const medico = await getById('medicos', cita.medicoId);
 
   el.innerHTML = cardHtml({
     title: 'Detalle de la cita',
@@ -216,7 +228,7 @@ function renderDetail(cita) {
   if (cancelBtn) {
     cancelBtn.addEventListener('click', async () => {
       await update('citas', cita.id, { estado: 'cancelada' });
-      render();
+      await render();
     });
   }
 }
@@ -243,10 +255,10 @@ function renderSummary(citas) {
   });
 }
 
-function openNuevaCitaModal() {
-  const pacientes = getAll('pacientes');
-  const medicos = getAll('medicos');
-  const catalogos = getCatalogos();
+async function openNuevaCitaModal() {
+  const pacientes = await getAll('pacientes');
+  const medicos = await getAll('medicos');
+  const catalogos = await getCatalogos();
 
   const bodyHtml = `
     <form id="form-nueva-cita" class="form-grid">
@@ -288,7 +300,7 @@ function openNuevaCitaModal() {
         close();
         state.date = data.fecha;
         document.getElementById('agenda-date-input').value = data.fecha;
-        render();
+        await render();
       });
     }
   });

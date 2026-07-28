@@ -1,6 +1,6 @@
 import { escapeHtml } from '../../utils.js';
 
-export function render(paciente, panelEl) {
+export async function render(paciente, panelEl) {
   panelEl.innerHTML = `
     <div class="card">
       <div class="card-header"><h2>Alergias y reacciones (${paciente.alergias.length})</h2></div>

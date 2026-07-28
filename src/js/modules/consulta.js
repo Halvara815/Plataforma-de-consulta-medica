@@ -9,7 +9,7 @@ let cleanupFns = [];
 let timerInterval = null;
 
 export async function mount(container, params = {}) {
-  const paciente = getById('pacientes', params.id);
+  const paciente = await getById('pacientes', params.id);
   if (!paciente) {
     container.innerHTML = '<div class="empty-state">Paciente no encontrado.</div>';
     return;
@@ -17,8 +17,8 @@ export async function mount(container, params = {}) {
 
   setTopbarTitle('Consulta médica', `${paciente.nombre} ${paciente.apellidos}`);
 
-  const catalogos = getCatalogos();
-  const medico = getById('medicos', 'MED-0001');
+  const catalogos = await getCatalogos();
+  const medico = await getById('medicos', 'MED-0001');
   const startTime = Date.now();
 
   container.innerHTML = `

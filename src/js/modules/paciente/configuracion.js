@@ -3,7 +3,7 @@ import { textField, selectField, getFormData, validateRequired } from '../../com
 import { showToast } from '../../components/toast.js';
 import { icon } from '../../icons.js';
 
-export function render(paciente, panelEl, ctx = {}) {
+export async function render(paciente, panelEl, ctx = {}) {
   panelEl.innerHTML = `
     <div class="card">
       <div class="card-header"><h2>Editar datos del paciente</h2></div>
