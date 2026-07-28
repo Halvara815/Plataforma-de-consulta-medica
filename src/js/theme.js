@@ -1,4 +1,4 @@
-import { getLocal, setLocal } from './storage.js';
+import { getLocal, setLocal } from './utils.js';
 
 const THEME_KEY = 'theme';
 

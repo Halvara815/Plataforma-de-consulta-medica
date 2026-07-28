@@ -2,8 +2,8 @@ import { query as queryCollection } from '../../services/dataService.js';
 import { escapeHtml, formatDate, statusBadgeClass, statusLabel } from '../../utils.js';
 import { icon } from '../../icons.js';
 
-export function render(paciente, panelEl) {
-  const citas = queryCollection('citas', (c) => c.pacienteId === paciente.id).sort(
+export async function render(paciente, panelEl) {
+  const citas = (await queryCollection('citas', (c) => c.pacienteId === paciente.id)).sort(
     (a, b) => new Date(`${b.fecha}T${b.horaInicio || '00:00'}`) - new Date(`${a.fecha}T${a.horaInicio || '00:00'}`)
   );
 

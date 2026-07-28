@@ -1,144 +1,101 @@
-import { idbGetAll, idbPut, idbClearAll, isIndexedDbAvailable } from '../storage.js';
-import { generateId } from '../utils.js';
+const API_URL = 'http://localhost:3000/api/v1';
 
-// Vite soporta imports nativos de JSON como módulos ES: esto es lo que en producción
-// se reemplaza por llamadas HTTP a un backend real (ver docs/PRODUCTION_ROADMAP.md).
-import pacientesJson from '../../data/pacientes.json';
-import citasJson from '../../data/citas.json';
-import medicosJson from '../../data/medicos.json';
-import consultasJson from '../../data/consultas.json';
-import recetasJson from '../../data/recetas.json';
-import documentosJson from '../../data/documentos.json';
-import estudiosJson from '../../data/estudios.json';
-import catalogosJson from '../../data/catalogos.json';
-
-const BASE_DATA = {
-  pacientes: pacientesJson,
-  citas: citasJson,
-  medicos: medicosJson,
-  consultas: consultasJson,
-  recetas: recetasJson,
-  documentos: documentosJson,
-  estudios: estudiosJson,
-  catalogos: catalogosJson
-};
-
-// Colecciones que aceptan altas/ediciones en esta demo y se sincronizan a IndexedDB
-// para que sobrevivan a un reload sin backend (ver storage.js STORES).
-const PERSISTED_COLLECTIONS = ['pacientes', 'citas', 'consultas', 'recetas', 'documentos', 'estudios'];
-
-const ID_PREFIX = {
-  pacientes: 'PAC',
-  citas: 'CITA',
-  consultas: 'CONS',
-  recetas: 'REC',
-  documentos: 'DOC',
-  estudios: 'EST'
-};
-
-let baseCache = null; // datos originales tal como vienen de los JSON, para poder "resetear la demo"
-let cache = null; // datos actuales en memoria (base + overrides de IndexedDB de esta sesión)
 let readyPromise = null;
 
-function mergeWithOverrides(baseRecords, overrideRecords) {
-  const map = new Map(baseRecords.map((record) => [record.id, record]));
-  overrideRecords.forEach((record) => {
-    if (record._deleted) {
-      map.delete(record.id);
-    } else {
-      map.set(record.id, { ...map.get(record.id), ...record });
-    }
-  });
-  return Array.from(map.values());
-}
+// Helper to make authenticated requests
+async function fetchApi(endpoint, options = {}) {
+  // Try to get token from wherever it is stored in the future (e.g. state or localStorage)
+  // Currently the app uses a global state, but for the fetch we can check localStorage
+  const token = localStorage.getItem('jwt_token') || sessionStorage.getItem('jwt_token');
+  
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {})
+  };
 
-async function loadAll() {
-  baseCache = { ...BASE_DATA };
-  cache = { ...baseCache };
-  for (const collection of PERSISTED_COLLECTIONS) {
-    cache[collection] = [...baseCache[collection]];
-    if (isIndexedDbAvailable()) {
-      const overrides = await idbGetAll(collection);
-      if (overrides && overrides.length) {
-        cache[collection] = mergeWithOverrides(baseCache[collection], overrides);
-      }
-    }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
-  return cache;
+  const response = await fetch(`${API_URL}/${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Error en la petición: ${response.statusText}`);
+  }
+
+  // If it's a DELETE or empty response, don't try to parse JSON
+  if (response.status === 204) {
+    return true;
+  }
+
+  return response.json();
 }
 
-export function initDataService() {
-  if (!readyPromise) readyPromise = loadAll();
+export async function initDataService() {
+  if (!readyPromise) {
+    // Simulamos que el servicio está listo (podría hacer un ping al backend o cargar catálogos base)
+    readyPromise = Promise.resolve(true);
+  }
   return readyPromise;
 }
 
-function assertReady() {
-  if (!cache) {
-    throw new Error('dataService no ha sido inicializado. Llama initDataService() antes de usarlo.');
+export async function getAll(collection) {
+  return fetchApi(collection);
+}
+
+export async function getCatalogos() {
+  return fetchApi('catalogos');
+}
+
+export async function getById(collection, id) {
+  return fetchApi(`${collection}/${id}`);
+}
+
+// Para mantener compatibilidad temporal con componentes que pasaban un callback (predicate),
+// traemos todos y filtramos en memoria. En producción, esto debería pasar a ser query params.
+export async function query(collection, predicate) {
+  const allRecords = await fetchApi(collection);
+  if (typeof predicate === 'function') {
+    return allRecords.filter(predicate);
   }
-}
-
-export function getAll(collection) {
-  assertReady();
-  return cache[collection] || [];
-}
-
-export function getCatalogos() {
-  assertReady();
-  return cache.catalogos;
-}
-
-export function getById(collection, id) {
-  assertReady();
-  return (cache[collection] || []).find((record) => String(record.id) === String(id)) || null;
-}
-
-export function query(collection, predicate) {
-  assertReady();
-  return (cache[collection] || []).filter(predicate);
+  // Si predicate fuera un string (querystring), podríamos enviarlo directo: fetchApi(`${collection}?${predicate}`)
+  return allRecords;
 }
 
 export async function create(collection, data) {
-  assertReady();
-  const record = { id: data.id || generateId(ID_PREFIX[collection] || 'REG'), ...data };
-  cache[collection] = [...(cache[collection] || []), record];
-  if (PERSISTED_COLLECTIONS.includes(collection)) {
-    await idbPut(collection, record);
-  }
-  return record;
+  return fetchApi(collection, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
 }
 
 export async function update(collection, id, patch) {
-  assertReady();
-  const list = cache[collection] || [];
-  const index = list.findIndex((r) => String(r.id) === String(id));
-  if (index === -1) return null;
-  const merged = { ...list[index], ...patch, id: list[index].id };
-  list[index] = merged;
-  cache[collection] = [...list];
-  if (PERSISTED_COLLECTIONS.includes(collection)) {
-    await idbPut(collection, merged);
-  }
-  return merged;
+  return fetchApi(`${collection}/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
 }
 
 export async function remove(collection, id) {
-  assertReady();
-  cache[collection] = (cache[collection] || []).filter((r) => String(r.id) !== String(id));
-  if (PERSISTED_COLLECTIONS.includes(collection)) {
-    await idbPut(collection, { id, _deleted: true });
-  }
-  return true;
+  return fetchApi(`${collection}/${id}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function resetDemoData() {
-  await idbClearAll();
-  cache = null;
-  readyPromise = null;
-  return initDataService();
+  // El reset en el backend podría llamar a un endpoint especial de seed, 
+  // pero por ahora solo limpiamos tokens
+  localStorage.removeItem('jwt_token');
+  sessionStorage.removeItem('jwt_token');
+  return true;
 }
 
 export function isPersistedCollection(collection) {
-  return PERSISTED_COLLECTIONS.includes(collection);
+  // Ahora todas las colecciones se persisten en el backend
+  return true;
 }
+

@@ -4,8 +4,8 @@ import { icon } from '../../icons.js';
 
 const TYPE_ICON = { documento: 'file-text', nota: 'note' };
 
-export function render(paciente, panelEl) {
-  const documentos = queryCollection(
+export async function render(paciente, panelEl) {
+  const documentos = (await queryCollection(
     'documentos',
     (d) => d.pacienteId === paciente.id && d.tipo !== 'imagen'
   ).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
