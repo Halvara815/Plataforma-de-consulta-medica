@@ -1,10 +1,12 @@
-import { getAll, getById, getCatalogos, create } from '../services/dataService.js';
+import { getAll, getById, getCatalogos, create, userFacingApiError } from '../services/dataService.js';
 import { setTopbarTitle } from '../components/topbar.js';
 import { createTable } from '../components/table.js';
 import { openModal } from '../components/modal.js';
 import { selectField, radioGroup, textField, textareaField, getFormData, validateRequired } from '../components/form.js';
-import { escapeHtml, formatDate, generateId } from '../utils.js';
+import { escapeHtml, formatDate } from '../utils.js';
 import { icon } from '../icons.js';
+import { showToast } from '../components/toast.js';
+import { appState } from '../state.js';
 
 let cleanupFns = [];
 let medicationRowCount = 0;
@@ -27,22 +29,22 @@ export async function mount(container, params = {}, query = {}) {
     </div>
   `;
 
-  renderTable(query.pacienteId);
+  await renderTable(query.pacienteId);
 
   document.getElementById('btn-nueva-receta').addEventListener('click', () => openNuevaRecetaModal(query.pacienteId));
   if (query.action === 'nueva') openNuevaRecetaModal(query.pacienteId);
 }
 
-function renderTable(pacienteFiltro) {
+async function renderTable(pacienteFiltro) {
   const cardEl = document.getElementById('recetas-table-card');
   cardEl.innerHTML = '';
 
-  let recetas = getAll('recetas');
-  if (pacienteFiltro) recetas = recetas.filter((r) => r.pacienteId === pacienteFiltro);
+  const [recetasData, pacientes] = await Promise.all([getAll('recetas'), getAll('pacientes')]);
+  let recetas = pacienteFiltro ? recetasData.filter((r) => r.pacienteId === pacienteFiltro) : recetasData;
   recetas = [...recetas].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
   const rows = recetas.map((r) => {
-    const paciente = getById('pacientes', r.pacienteId);
+    const paciente = pacientes.find((p) => p.id === r.pacienteId);
     return {
       ...r,
       pacienteNombre: paciente ? `${paciente.nombre} ${paciente.apellidos}` : 'Paciente no encontrado',
@@ -74,9 +76,9 @@ function renderTable(pacienteFiltro) {
   cardEl.appendChild(table.el);
 }
 
-function openDetalleReceta(receta) {
-  const paciente = getById('pacientes', receta.pacienteId);
-  const medico = getById('medicos', receta.medicoId);
+async function openDetalleReceta(receta) {
+  const paciente = await getById('pacientes', receta.pacienteId);
+  const medico = await getById('medicos', receta.medicoId);
 
   const bodyHtml = `
     <div class="stack">
@@ -136,9 +138,11 @@ function openDetalleReceta(receta) {
   });
 }
 
-function openNuevaRecetaModal(pacienteFiltro) {
-  const pacientes = getAll('pacientes');
-  const catalogos = getCatalogos();
+async function openNuevaRecetaModal(pacienteFiltro) {
+  const pacientes = await getAll('pacientes');
+  const catalogos = await getCatalogos();
+  const { currentUser } = appState.getState();
+  const medico = currentUser?.medicoId ? await getById('medicos', currentUser.medicoId) : null;
   medicationRowCount = 0;
 
   const bodyHtml = `
@@ -202,26 +206,33 @@ function openNuevaRecetaModal(pacienteFiltro) {
           return;
         }
 
+        if (!currentUser?.medicoId) {
+          showToast({ message: 'Tu cuenta no tiene un médico vinculado; no puedes emitir recetas.', tone: 'danger' });
+          return;
+        }
+
         const data = getFormData(form);
         const interacciones = findInteractions(medicamentos, catalogos);
-        const folioNumber = 4600 + getAll('recetas').length;
 
-        await create('recetas', {
-          folio: `REC-${String(folioNumber).padStart(7, '0')}`,
-          pacienteId: data.pacienteId,
-          medicoId: 'MED-0001',
-          fecha: new Date().toISOString().slice(0, 10),
-          tipo: data.tipo,
-          vigenciaDias: parseInt(data.vigenciaDias, 10) || 5,
-          medicamentos,
-          interacciones,
-          notasPaciente: data.notasPaciente || '',
-          firma: { medico: 'Dr. Carlos Pérez', cedula: '12345678' },
-          estado: 'activa'
-        });
+        try {
+          await create('recetas', {
+            pacienteId: data.pacienteId,
+            medicoId: currentUser.medicoId,
+            fecha: new Date().toISOString().slice(0, 10),
+            tipo: data.tipo,
+            vigenciaDias: parseInt(data.vigenciaDias, 10) || 5,
+            medicamentos,
+            interacciones,
+            notasPaciente: data.notasPaciente || '',
+            firma: { medico: medico?.nombre || '', cedula: medico?.cedula || '' },
+            estado: 'activa'
+          });
 
-        close();
-        renderTable(pacienteFiltro);
+          close();
+          await renderTable(pacienteFiltro);
+        } catch (error) {
+          showToast({ message: userFacingApiError(error), tone: 'danger' });
+        }
       });
     }
   });

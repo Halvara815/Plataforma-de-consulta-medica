@@ -17,6 +17,9 @@ export class CatalogosService {
     consultorios: ['Consultorio 1', 'Consultorio 2', 'Consultorio 3'],
     aseguradoras: ['GNP', 'MetLife', 'AXA', 'Seguros Monterrey'],
     estadosCita: ['pendiente', 'confirmada', 'en_consulta', 'completada', 'cancelada'],
+    interaccionesConocidas: [
+      { medicamentos: ['Paracetamol', 'Amoxicilina'], descripcion: 'Sin interacciones clínicamente relevantes conocidas.' },
+    ],
   };
 
   findAll() {

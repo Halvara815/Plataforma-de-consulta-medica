@@ -1,9 +1,11 @@
-import { getById, getCatalogos, create } from '../services/dataService.js';
+import { getById, getCatalogos, create, userFacingApiError } from '../services/dataService.js';
 import { setTopbarTitle } from '../components/topbar.js';
 import { textField, textareaField, getFormData, validateRequired } from '../components/form.js';
 import { navigateTo } from '../router.js';
 import { calcAge, calcIMC, escapeHtml, initials } from '../utils.js';
 import { icon } from '../icons.js';
+import { showToast } from '../components/toast.js';
+import { appState } from '../state.js';
 
 let cleanupFns = [];
 let timerInterval = null;
@@ -18,7 +20,7 @@ export async function mount(container, params = {}) {
   setTopbarTitle('Consulta médica', `${paciente.nombre} ${paciente.apellidos}`);
 
   const catalogos = await getCatalogos();
-  const medico = await getById('medicos', 'MED-0001');
+  const { currentUser } = appState.getState();
   const startTime = Date.now();
 
   container.innerHTML = `
@@ -134,38 +136,47 @@ export async function mount(container, params = {}) {
     const peso = parseFloat(data.peso) || null;
     const talla = parseFloat(data.talla) || null;
 
-    await create('consultas', {
-      pacienteId: paciente.id,
-      medicoId: medico?.id || 'MED-0001',
-      fecha: new Date().toISOString(),
-      tipo: 'seguimiento',
-      motivoConsulta: data.motivoConsulta,
-      padecimientoActual: data.padecimientoActual || '',
-      sintomas: data.sintomas ? data.sintomas.split(',').map((s) => s.trim()).filter(Boolean) : [],
-      signosVitales: {
-        ta: data.ta || '',
-        fc: parseInt(data.fc, 10) || null,
-        fr: parseInt(data.fr, 10) || null,
-        temp: parseFloat(data.temp) || null,
-        spo2: parseInt(data.spo2, 10) || null,
-        peso,
-        talla,
-        imc: calcIMC(peso, talla)
-      },
-      exploracionFisica: data.exploracionFisica || '',
-      antecedentes: {
-        heredofamiliares: data.heredofamiliares || '',
-        personalesPatologicos: data.personalesPatologicos || '',
-        personalesNoPatologicos: data.personalesNoPatologicos || ''
-      },
-      diagnosticos,
-      planTerapeutico: data.planTerapeutico ? data.planTerapeutico.split('\n').map((s) => s.trim()).filter(Boolean) : [],
-      notas: data.notas || '',
-      duracion: document.getElementById('consulta-timer')?.textContent || '00:00:00',
-      estado: 'completada'
-    });
+    if (!currentUser?.medicoId) {
+      showToast({ message: 'Tu cuenta no tiene un médico vinculado; no puedes registrar consultas.', tone: 'danger' });
+      return;
+    }
 
-    navigateTo(`#/historia-clinica/${paciente.id}`);
+    try {
+      await create('consultas', {
+        pacienteId: paciente.id,
+        medicoId: currentUser.medicoId,
+        fecha: new Date().toISOString(),
+        tipo: 'seguimiento',
+        motivoConsulta: data.motivoConsulta,
+        padecimientoActual: data.padecimientoActual || '',
+        sintomas: data.sintomas ? data.sintomas.split(',').map((s) => s.trim()).filter(Boolean) : [],
+        signosVitales: {
+          ta: data.ta || '',
+          fc: parseInt(data.fc, 10) || null,
+          fr: parseInt(data.fr, 10) || null,
+          temp: parseFloat(data.temp) || null,
+          spo2: parseInt(data.spo2, 10) || null,
+          peso,
+          talla,
+          imc: calcIMC(peso, talla)
+        },
+        exploracionFisica: data.exploracionFisica || '',
+        antecedentes: {
+          heredofamiliares: data.heredofamiliares || '',
+          personalesPatologicos: data.personalesPatologicos || '',
+          personalesNoPatologicos: data.personalesNoPatologicos || ''
+        },
+        diagnosticos,
+        planTerapeutico: data.planTerapeutico ? data.planTerapeutico.split('\n').map((s) => s.trim()).filter(Boolean) : [],
+        notas: data.notas || '',
+        duracion: document.getElementById('consulta-timer')?.textContent || '00:00:00',
+        estado: 'completada'
+      });
+
+      navigateTo(`#/historia-clinica/${paciente.id}`);
+    } catch (error) {
+      showToast({ message: userFacingApiError(error), tone: 'danger' });
+    }
   });
 }
 

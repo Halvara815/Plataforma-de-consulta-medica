@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './modules/auth/auth.module';
 import { PacientesModule } from './modules/pacientes/pacientes.module';
+import { MedicosModule } from './modules/medicos/medicos.module';
 import { CatalogosModule } from './modules/catalogos/catalogos.module';
 import { CitasModule } from './modules/citas/citas.module';
 import { ConsultasModule } from './modules/consultas/consultas.module';
@@ -51,6 +52,7 @@ import { UsuariosModule } from './modules/usuarios/usuarios.module';
     AuthModule,
     AuthorizationModule,
     PacientesModule,
+    MedicosModule,
     CatalogosModule,
     CitasModule,
     ConsultasModule,
