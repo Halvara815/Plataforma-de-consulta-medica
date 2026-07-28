@@ -1,22 +1,21 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: password123
-      POSTGRES_DB: consulta_medica
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER debe definirse en .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD debe definirse en .env}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB debe definirse en .env}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:?POSTGRES_PORT debe definirse en .env}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes', '--requirepass', '${REDIS_PASSWORD:?REDIS_PASSWORD debe definirse en .env}']
     ports:
-      - "6379:6379"
+      - "127.0.0.1:${REDIS_PORT:?REDIS_PORT debe definirse en .env}:6379"
     volumes:
       - redisdata:/data
     restart: unless-stopped

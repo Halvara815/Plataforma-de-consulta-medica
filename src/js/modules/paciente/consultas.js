@@ -2,15 +2,16 @@ import { getById, query as queryCollection } from '../../services/dataService.js
 import { escapeHtml, formatDate } from '../../utils.js';
 import { icon } from '../../icons.js';
 
-function medicoNombre(medicoId) {
-  const medico = await getById('medicos', medicoId);
-  return medico ? medico.nombre : '';
-}
-
 export async function render(paciente, panelEl) {
   const consultas = (await queryCollection('consultas', (c) => c.pacienteId === paciente.id)).sort(
     (a, b) => new Date(b.fecha) - new Date(a.fecha)
   );
+  const medicos = await Promise.all(
+    [...new Set(consultas.map((consulta) => consulta.medicoId).filter(Boolean))].map((medicoId) =>
+      getById('medicos', medicoId)
+    )
+  );
+  const medicoNombres = new Map(medicos.filter(Boolean).map((medico) => [medico.id, medico.nombre]));
 
   panelEl.innerHTML = `
     <div class="card">
@@ -26,7 +27,7 @@ export async function render(paciente, panelEl) {
                     <span class="consulta-item-icon">${icon('stethoscope', { size: 17 })}</span>
                     <span class="consulta-item-main">
                       <span class="consulta-item-title">${escapeHtml(c.motivoConsulta)}</span>
-                      <span class="consulta-item-meta">${formatDate(c.fecha, { withTime: true })} · ${escapeHtml(medicoNombre(c.medicoId))}</span>
+                      <span class="consulta-item-meta">${formatDate(c.fecha, { withTime: true })} · ${escapeHtml(medicoNombres.get(c.medicoId) || '')}</span>
                     </span>
                     ${icon('chevron-down', { size: 16, className: 'icon consulta-item-chevron' })}
                   </button>

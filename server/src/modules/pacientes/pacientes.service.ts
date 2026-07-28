@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Paciente } from './entities/paciente.entity';
 import { CreatePacienteDto } from './dto/create-paciente.dto';
 import { UpdatePacienteDto } from './dto/update-paciente.dto';
+import { ListPacientesQueryDto } from './dto/list-pacientes-query.dto';
 
 @Injectable()
 export class PacientesService {
@@ -17,10 +18,43 @@ export class PacientesService {
     return await this.pacientesRepository.save(paciente);
   }
 
-  async findAll(): Promise<Paciente[]> {
-    return await this.pacientesRepository.find({
-      order: { apellidos: 'ASC' },
-    });
+  async findAll(query: ListPacientesQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 50;
+    const patientsQuery = this.pacientesRepository
+      .createQueryBuilder('paciente')
+      .orderBy('paciente.apellidos', 'ASC')
+      .addOrderBy('paciente.nombre', 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    if (query.estado) {
+      patientsQuery.andWhere('paciente.estado = :estado', { estado: query.estado });
+    }
+
+    const search = query.q?.trim();
+    if (search) {
+      patientsQuery.andWhere(
+        `(paciente.nombre ILIKE :search
+          OR paciente.apellidos ILIKE :search
+          OR CONCAT(paciente.nombre, ' ', paciente.apellidos) ILIKE :search
+          OR CAST(paciente.id AS TEXT) ILIKE :search
+          OR paciente.curp ILIKE :search
+          OR paciente.nss ILIKE :search)`,
+        { search: `%${search}%` },
+      );
+    }
+
+    const [items, total] = await patientsQuery.getManyAndCount();
+    return {
+      items,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async findOne(id: string): Promise<Paciente> {

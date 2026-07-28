@@ -11,10 +11,10 @@ Este README es la guía rectora de arquitectura, compatibilidad y fases de traba
 | Área | Estado actual |
 |---|---|
 | Frontend | Vite 5, HTML, CSS y JavaScript ES Modules, con router hash y módulos existentes en `src/js/`. |
-| Cliente de datos | `src/js/services/dataService.js` consume la API bajo `/api/v1`; aún usa token en `localStorage`/`sessionStorage`, lo cual debe eliminarse. |
+| Cliente de datos | `src/js/services/dataService.js` consume la API bajo `/api/v1`; el access token vive solo en memoria y el refresh token en una cookie `HttpOnly`. |
 | API | NestJS + TypeScript en `server/`. TypeORM es el ORM seleccionado. |
-| Persistencia | PostgreSQL mediante TypeORM. Hoy `synchronize: true` crea esquema automáticamente: solo es aceptable de forma temporal en desarrollo. |
-| Caché/sesiones | Redis está disponible mediante Docker, pero aún no se usa para sesiones ni revocación. |
+| Persistencia | PostgreSQL mediante TypeORM. El esquema se crea con migraciones versionadas y `synchronize: false`. |
+| Caché/sesiones | PostgreSQL es la fuente de verdad de sesiones revocables y refresh tokens rotativos. Redis, cuando se habilita, distribuye los límites de login y la caché de revocación. |
 | Contenedores | `docker-compose.yml` inicia PostgreSQL y Redis para desarrollo local; todavía no contiene servicios de API, frontend ni Nginx. |
 | Documentos | El backend usa almacenamiento local temporal en `uploads/`; no es almacenamiento clínico de producción. |
 
@@ -34,22 +34,30 @@ Este README es la guía rectora de arquitectura, compatibilidad y fases de traba
 
 El prefijo global es `/api/v1`. Los recursos existentes conservan los nombres del dominio del frontend:
 
-- `POST /auth/login`
+- `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout` y `GET /auth/me`
+- Administración protegida: `GET`/`POST`/`PATCH /usuarios`, `GET /usuarios/roles` y `GET /auditoria`
 - CRUD parcial de `/pacientes`, `/citas`, `/consultas`, `/recetas`, `/estudios` y `/documentos`
 - Lectura de `/catalogos`
 
-La existencia de un endpoint no significa que esté listo para producción. En particular, faltan o están incompletos `/auth/refresh`, `/auth/logout`, `/auth/me`, usuarios, roles, permisos granulares, auditoría, paginación, control de concurrencia, migraciones y contrato OpenAPI.
+La existencia de un endpoint no significa que esté listo para producción. La primera entrega de identidad ya incluye usuarios, roles, permisos, sesiones revocables, límites de login, expiración por inactividad, detección de reutilización de refresh token, administración básica y auditoría append-only. Pacientes y citas ya cuentan con su primer contrato de paginación y reglas de agenda; siguen pendientes OpenAPI, pruebas automatizadas y los controles operativos de producción.
+
+### Listados de Fase 3
+
+- `GET /pacientes?page=1&limit=50&q=ana&estado=activo` devuelve `{ items, pagination }`. `q` busca nombre, apellidos, identificador, CURP y NSS. `limit` admite de 1 a 100.
+- `GET /citas?page=1&limit=50&fecha=YYYY-MM-DD&medicoId=<uuid>&pacienteId=<uuid>&consultorioId=<texto>&estado=<estado>` devuelve `{ items, pagination }`. También acepta `fechaDesde` y `fechaHasta` cuando no se consulta una fecha puntual.
+- El cliente conserva `getAll()` para recursos que aún devuelven arreglos y ofrece `getPage()` para los listados paginados. Esto evita romper módulos heredados durante la migración.
+- Al crear o modificar una cita, el backend valida médico y paciente activos, el intervalo horario, los cambios de estado y los solapes de médico o consultorio. Un solape devuelve `409 Conflict`; una transición inválida devuelve `400 Bad Request`.
 
 ## Bloqueantes actuales de producción
 
 Antes de conectar datos reales se debe resolver lo siguiente:
 
-- Reemplazar las credenciales de demostración de autenticación por usuarios reales, contraseñas con hash fuerte y roles/permisos.
+- Sustituir la cuenta sintética de desarrollo por usuarios administrados y revisados antes de cualquier entorno no local.
 - Eliminar los valores por defecto de base de datos y JWT; las credenciales se obtienen exclusivamente desde variables de entorno.
-- Sustituir `synchronize: true` por migraciones TypeORM versionadas y reproducibles.
-- Implementar refresh tokens rotativos, revocación en Redis, expiración por inactividad y cierre de sesión en servidor.
-- Retirar el token de `localStorage` y `sessionStorage`; el access token debe residir en memoria y el refresh token en cookie `HttpOnly`, `Secure` y `SameSite`.
-- Añadir autorización por permiso y auditoría append-only de accesos a expedientes y escrituras sensibles.
+- Mantener y revisar las migraciones TypeORM versionadas antes de cada cambio de esquema.
+- Habilitar Redis obligatorio fuera de desarrollo y definir una política revisada de duración de sesión por inactividad.
+- Configurar `REFRESH_COOKIE_SECURE=true`, HTTPS y CSRF antes de desplegar cookies fuera de localhost.
+- Revisar periódicamente la integridad y retención de la auditoría append-only.
 - Reemplazar el directorio local `uploads/` por almacenamiento seguro de objetos, validación de tipo/tamaño y URLs de descarga autorizadas.
 - Añadir Dockerfiles, Nginx, HTTPS, CORS restringido, CSRF cuando se usen cookies, respaldos, monitoreo y CI/CD.
 
@@ -90,27 +98,34 @@ Las fases se entregan en cortes verticales: contrato OpenAPI → migración → 
 
 ### Fase 1 — Base de datos e infraestructura de desarrollo
 
-- Reemplazar `synchronize: true` por migraciones TypeORM, restricciones, índices, baja lógica y `timestamptz`.
-- Configurar variables de entorno, health check, logs seguros y contenedores para API y frontend.
+- Mantener migraciones TypeORM, restricciones e `timestamptz`; la primera migración del esquema ya está aplicada localmente.
+- Configurar variables de entorno, health check y logs seguros; quedan pendientes los contenedores para API y frontend.
 - Mantener PostgreSQL y Redis solo como dependencias de desarrollo hasta completar controles de seguridad.
 
-**Salida:** una base vacía migra desde cero y el entorno local no depende de credenciales incorporadas al código.
+**Salida:** una base vacía migra desde cero, cuenta con health check en `GET /api/v1/health`, datos sintéticos opcionales para desarrollo y no depende de credenciales incorporadas al código.
 
 ### Fase 2 — Identidad, permisos y auditoría
 
-- Implementar usuarios, médicos, roles y permisos granulares.
-- Completar login, refresh, logout y `/auth/me`; integrar Redis para sesiones revocables y límites de intentos.
-- Conectar login, guardas de rutas, topbar y sidebar; retirar almacenamiento local del token.
-- Crear bitácora append-only y pruebas de autenticación, autorización y auditoría.
+- Se implementaron usuarios asociados opcionalmente a médicos, roles `ADMIN`/`MEDICO`/`ASISTENTE`, permisos granulares y guardas sobre los recursos clínicos.
+- Se implementaron login, refresh rotativo, logout, `/auth/me`, sesiones revocables en PostgreSQL y cookie `HttpOnly` para refresh. El access token reside únicamente en memoria.
+- Se agregó pantalla de login, restauración de sesión, guardas de rutas y cierre de sesión en la barra lateral.
+- La bitácora registra autenticación y lecturas/escrituras protegidas; PostgreSQL impide `UPDATE` y `DELETE` sobre `auditoria` mediante trigger.
+- Redis limita los intentos fallidos por identidad seudonimizada mediante HMAC y replica la revocación de sesión. Si está apagado en desarrollo, existe una reserva local; en un entorno compartido debe configurarse `REDIS_ENABLED=true` y `REDIS_REQUIRED=true`.
+- El rol con `usuarios:gestionar` puede abrir `#/administracion`, crear usuarios, asignar los roles existentes, activar/desactivar cuentas y reiniciar contraseñas. El backend conserva al menos un administrador activo y revoca sesiones al desactivar o restablecer una contraseña.
+- Los rechazos de permisos quedan auditados como `authorization.denied`, sin registrar cuerpos ni datos clínicos. Cada refresh se consume una sola vez: su reutilización revoca la sesión, registra `auth.refresh_reuse` y propaga la revocación a Redis.
+- La sesión conserva un vencimiento absoluto y uno configurable por inactividad (`SESSION_IDLE_TTL_MINUTES`, 60 minutos en desarrollo). Al vencer, se revoca en PostgreSQL y Redis y registra `auth.session_idle_timeout`.
+- Pendiente en esta fase: políticas operativas de retención y revisión de auditoría.
 
-**Salida:** ninguna ruta protegida se monta sin sesión; `401` redirige a login y `403` a acceso denegado.
+**Salida actual:** ninguna ruta protegida se monta sin sesión; `401` redirige a login, `403` se presenta como acceso denegado y las acciones protegidas quedan auditadas.
 
 ### Fase 3 — Pacientes y agenda
 
-- Completar pacientes, médicos y citas con paginación, filtros, búsqueda, permisos y control de concurrencia.
-- Validar en backend las transiciones de cita y migrar los módulos frontend correspondientes.
+- Implementado: `/pacientes` y `/citas` admiten paginación, filtros y búsqueda autorizada desde el backend; la interfaz de Pacientes y Agenda los consume directamente.
+- Implementado: las consultas de agenda traen médico y paciente asociados, por lo que se eliminaron lecturas adicionales por cada cita. La fecha inicial de Agenda ya usa el día local y el filtro por paciente se aplica antes de cargar la vista.
+- Implementado: la creación y edición de citas se ejecutan en una transacción, toman bloqueos transaccionales de PostgreSQL por médico/fecha y consultorio/fecha, rechazan solapes con `409` y validan las transiciones `pendiente → confirmada → en_consulta → completada` o cancelación desde los estados no finales.
+- Pendiente: contrato OpenAPI y pruebas automatizadas de integración/extremo a extremo para todos los casos clínicos.
 
-**Salida:** crear/buscar paciente y agendar/modificar una cita funciona extremo a extremo, con auditoría.
+**Salida parcial verificada:** buscar paciente, filtrar la agenda y rechazar un solape o transición inválida funciona contra la base local autenticada. Falta completar las pruebas automatizadas y la navegación visual antes de declarar terminada la fase.
 
 ### Fase 4 — Núcleo clínico
 
@@ -158,13 +173,34 @@ cd server
 npm install
 npm run start:dev
 npm run build
+npm run migration:run
+npm run seed:dev
 ```
+
+`npm run seed:dev` carga una colección pequeña de médicos, pacientes, registros clínicos, roles, permisos y una cuenta de acceso **sintéticos** para desarrollo. Es repetible: no borra registros existentes ni duplica las entradas de demostración. Las credenciales locales se definen en las variables ignoradas `DEV_SEED_ADMIN_EMAIL` y `DEV_SEED_ADMIN_PASSWORD`; no debe ejecutarse en una base con datos reales.
 
 ### Servicios locales
 
 ```bash
-docker compose up -d postgres redis
+Copy-Item .env.example .env
+Copy-Item server\.env.example server\.env
+# Edita ambos archivos y reemplaza los marcadores por secretos locales.
+docker compose up -d redis
 ```
+
+Después de iniciar Redis, actualiza `server/.env` sin copiar secretos al repositorio:
+
+```dotenv
+REDIS_ENABLED=true
+REDIS_REQUIRED=false
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_PASSWORD=el_mismo_valor_de_REDIS_PASSWORD_en_.env
+```
+
+Para un entorno compartido usa `REDIS_REQUIRED=true`; así el backend no inicia sin la protección distribuida. En desarrollo la reserva local mantiene el límite de intentos, pero no sustituye Redis entre varias instancias.
+
+PostgreSQL nativo ya usa el puerto `5432`; por eso no debes iniciar el contenedor `postgres` mientras uses la instalación local. Si necesitas un PostgreSQL aislado en Docker, configura `POSTGRES_PORT=5433` en `.env` y ejecuta `docker compose up -d postgres redis`.
 
 El Docker Compose actual es exclusivo de desarrollo y no debe usarse con sus valores por defecto en producción.
 

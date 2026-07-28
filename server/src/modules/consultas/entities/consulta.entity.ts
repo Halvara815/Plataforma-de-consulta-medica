@@ -21,7 +21,7 @@ export class Consulta {
   @Column()
   medicoId: string;
 
-  @Column({ type: 'timestamp' })
+  @Column({ type: 'timestamptz' })
   fecha: Date;
 
   @Column()

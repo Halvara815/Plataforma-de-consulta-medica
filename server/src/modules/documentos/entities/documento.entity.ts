@@ -22,7 +22,7 @@ export class Documento {
   @Column()
   nombre: string;
 
-  @Column({ type: 'timestamp' })
+  @Column({ type: 'timestamptz' })
   fecha: Date;
 
   @Column({ nullable: true })

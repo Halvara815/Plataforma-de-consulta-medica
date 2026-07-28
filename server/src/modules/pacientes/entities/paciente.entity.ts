@@ -55,7 +55,7 @@ export class Paciente {
   @Column({ default: 'activo' })
   estado: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ type: 'timestamptz' })
   fechaRegistro: Date;
 
   // Relaciones inversas

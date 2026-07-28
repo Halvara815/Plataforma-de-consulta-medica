@@ -1,4 +1,4 @@
-import { getAll, getById, create, query as queryCollection } from '../services/dataService.js';
+import { getAll, getById, getCatalogos, getPage, create, query as queryCollection } from '../services/dataService.js';
 import { setTopbarTitle } from '../components/topbar.js';
 import { cardHtml } from '../components/card.js';
 import { createSectionNav } from '../components/sectionNav.js';
@@ -44,19 +44,18 @@ const SECTIONS = [
 
 let cleanupFns = [];
 let activeSectionNav = null;
+let searchDebounceId = null;
 
 export async function mount(container, params = {}, query = {}) {
   setTopbarTitle('Pacientes', 'Consulta, gestiona y mantén la información clínica de tus pacientes');
 
-  const pacientes = await getAll('pacientes');
-  const searchTerm = query.q || '';
-  const filtered = searchTerm
-    ? pacientes.filter((p) =>
-        `${p.nombre} ${p.apellidos} ${p.id}`.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    : pacientes;
+  const searchTerm = (query.q || '').trim();
+  const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
+  const result = await getPage('pacientes', { q: searchTerm, page, limit: 50 });
+  const pacientes = result.items || [];
+  const pagination = result.pagination || { page, total: pacientes.length, totalPages: 1 };
 
-  const selectedId = params.id || (filtered[0] || pacientes[0])?.id;
+  const selectedId = params.id || pacientes[0]?.id;
   const paciente = selectedId ? await getById('pacientes', selectedId) : null;
 
   container.innerHTML = `
@@ -74,7 +73,7 @@ export async function mount(container, params = {}, query = {}) {
     </div>
   `;
 
-  renderLayout(container, pacientes, filtered, paciente, searchTerm);
+  await renderLayout(container, pacientes, pagination, paciente, searchTerm);
 
   const nuevoBtn = document.getElementById('btn-nuevo-paciente');
   const openNuevo = () => openNuevoPacienteModal();
@@ -84,7 +83,7 @@ export async function mount(container, params = {}, query = {}) {
   if (query.action === 'nuevo') openNuevoPacienteModal();
 }
 
-function renderLayout(container, allPacientes, filtered, paciente, searchTerm) {
+async function renderLayout(container, pacientes, pagination, paciente, searchTerm) {
   const layoutEl = document.getElementById('pacientes-layout');
 
   layoutEl.innerHTML = `
@@ -94,23 +93,50 @@ function renderLayout(container, allPacientes, filtered, paciente, searchTerm) {
           ${icon('search', { size: 16 })}
           <input type="search" id="paciente-search" placeholder="Buscar pacientes…" value="${escapeHtml(searchTerm)}" />
         </div>
-        <div class="text-tertiary" style="font-size:11.5px;">${filtered.length} de ${allPacientes.length} pacientes</div>
+        <div class="text-tertiary" style="font-size:11.5px;">${pacientes.length} de ${pagination.total} pacientes</div>
         <div class="patient-directory" id="patient-directory"></div>
+        ${
+          pagination.totalPages > 1
+            ? `<div class="table-pagination">
+                <span>Página ${pagination.page} de ${pagination.totalPages}</span>
+                <div class="view-actions">
+                  <button type="button" class="btn btn-ghost btn-sm" data-patient-page="prev" ${pagination.page <= 1 ? 'disabled' : ''}>‹ Anterior</button>
+                  <button type="button" class="btn btn-ghost btn-sm" data-patient-page="next" ${pagination.page >= pagination.totalPages ? 'disabled' : ''}>Siguiente ›</button>
+                </div>
+              </div>`
+            : ''
+        }
       </div>
     </div>
     <div id="patient-detail"></div>
     <div id="patient-timeline"></div>
   `;
 
-  renderDirectory(filtered, paciente?.id);
-  renderDetail(paciente);
-  renderTimeline(paciente);
+  renderDirectory(pacientes, paciente?.id);
+  await renderDetail(paciente);
+  await renderTimeline(paciente);
 
   const searchInput = document.getElementById('paciente-search');
-  searchInput.addEventListener('input', (e) => {
+  const onSearch = (e) => {
     const term = e.target.value;
-    const url = paciente ? `#/pacientes/${paciente.id}` : '#/pacientes';
-    navigateTo(`${url}?q=${encodeURIComponent(term)}`);
+    window.clearTimeout(searchDebounceId);
+    searchDebounceId = window.setTimeout(() => {
+      const url = paciente ? `#/pacientes/${paciente.id}` : '#/pacientes';
+      navigateTo(`${url}?q=${encodeURIComponent(term)}`);
+    }, 250);
+  };
+  searchInput.addEventListener('input', onSearch);
+  cleanupFns.push(() => {
+    searchInput.removeEventListener('input', onSearch);
+    window.clearTimeout(searchDebounceId);
+  });
+
+  layoutEl.querySelectorAll('[data-patient-page]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const nextPage = pagination.page + (button.dataset.patientPage === 'next' ? 1 : -1);
+      const base = paciente ? `#/pacientes/${paciente.id}` : '#/pacientes';
+      navigateTo(`${base}?q=${encodeURIComponent(searchTerm)}&page=${nextPage}`);
+    });
   });
 }
 
@@ -136,7 +162,7 @@ function renderDirectory(list, selectedId) {
     .join('');
 }
 
-function renderDetail(paciente) {
+async function renderDetail(paciente) {
   const el = document.getElementById('patient-detail');
   if (activeSectionNav) {
     activeSectionNav.destroy();
@@ -185,12 +211,12 @@ function renderDetail(paciente) {
   el.appendChild(sectionNavContainer);
 
   const ctx = {
-    refresh() {
+    async refresh() {
       const fresh = await getById('pacientes', paciente.id);
       const previousActive = activeSectionNav?.getActive();
-      renderDetail(fresh);
+      await renderDetail(fresh);
       if (previousActive && activeSectionNav) activeSectionNav.setActive(previousActive);
-      renderTimeline(fresh);
+      await renderTimeline(fresh);
     }
   };
 
@@ -198,7 +224,7 @@ function renderDetail(paciente) {
     items: SECTIONS,
     activeId: 'dashboard',
     ariaLabel: 'Secciones del expediente del paciente',
-    renderPanel: (id, panelEl) => {
+    renderPanel: async (id, panelEl) => {
       const section = SECTIONS.find((s) => s.id === id);
       const fresh = await getById('pacientes', paciente.id) || paciente;
       return section.mod.render(fresh, panelEl, ctx);
@@ -207,7 +233,7 @@ function renderDetail(paciente) {
   sectionNavContainer.appendChild(activeSectionNav.el);
 }
 
-function renderTimeline(paciente) {
+async function renderTimeline(paciente) {
   const el = document.getElementById('patient-timeline');
   if (!paciente) {
     el.innerHTML = '';
@@ -261,8 +287,8 @@ function renderTimeline(paciente) {
 }
 
 async function openNuevoPacienteModal() {
-  const [pacientes, medicos, catalogos] = await Promise.all([
-    getAll('pacientes'),
+  const [, medicos, catalogos] = await Promise.all([
+    getPage('pacientes', { estado: 'activo', page: 1, limit: 100 }),
     getAll('medicos'),
     getCatalogos()
   ]);

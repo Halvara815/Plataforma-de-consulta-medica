@@ -1,10 +1,11 @@
 import './theme.js';
 import { initTheme } from './theme.js';
 import { appState, toggleSidebarMobile } from './state.js';
-import { initDataService } from './services/dataService.js';
+import { initDataService, restoreSession, userFacingApiError } from './services/dataService.js';
 import { mountSidebar } from './components/sidebar.js';
 import { mountTopbar } from './components/topbar.js';
 import { initRouter } from './router.js';
+import { escapeHtml } from './utils.js';
 
 initTheme();
 
@@ -43,15 +44,27 @@ syncShellClasses();
 appState.subscribe(syncShellClasses);
 
 async function bootstrap() {
-  contentEl.innerHTML = '<div class="loading-state">Cargando datos de la demo…</div>';
+  contentEl.innerHTML = '<div class="loading-state">Comprobando conexión segura…</div>';
   try {
     await initDataService();
-    appState.setState({ dataReady: true });
+    let currentUser = null;
+    try {
+      currentUser = await restoreSession();
+    } catch (error) {
+      if (error?.code !== 'AUTH_REQUIRED') throw error;
+    }
+    appState.setState({ currentUser, dataReady: Boolean(currentUser) });
     initRouter(contentEl);
   } catch (err) {
-    console.error('No se pudieron cargar los datos de la demo', err);
-    contentEl.innerHTML =
-      '<div class="empty-state">No se pudieron cargar los datos de demostración. Verifica la consola para más detalles.</div>';
+    console.error('No se pudo iniciar el cliente de datos', err);
+    contentEl.innerHTML = `
+      <section class="empty-state" role="alert">
+        <h1>No se pudo conectar con el sistema</h1>
+        <p>${escapeHtml(userFacingApiError(err))}</p>
+        <button type="button" class="btn btn-secondary" data-action="retry-bootstrap">Reintentar</button>
+      </section>
+    `;
+    contentEl.querySelector('[data-action="retry-bootstrap"]')?.addEventListener('click', bootstrap);
   }
 }
 

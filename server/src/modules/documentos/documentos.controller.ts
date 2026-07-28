@@ -6,6 +6,8 @@ import { DocumentosService } from './documentos.service';
 import { CreateDocumentoDto } from './dto/create-documento.dto';
 import { UpdateDocumentoDto } from './dto/update-documento.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import * as fs from 'fs';
 
 // Helper function to ensure upload directory exists
@@ -14,12 +16,13 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('documentos')
 export class DocumentosController {
   constructor(private readonly documentosService: DocumentosService) {}
 
   @Post()
+  @RequirePermissions('documentos:escribir')
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({
       destination: uploadDir,
@@ -45,21 +48,25 @@ export class DocumentosController {
   }
 
   @Get()
+  @RequirePermissions('documentos:leer')
   findAllByPaciente(@Query('pacienteId') pacienteId: string) {
     return this.documentosService.findAllByPaciente(pacienteId);
   }
 
   @Get(':id')
+  @RequirePermissions('documentos:leer')
   findOne(@Param('id') id: string) {
     return this.documentosService.findOne(id);
   }
 
   @Patch(':id')
+  @RequirePermissions('documentos:escribir')
   update(@Param('id') id: string, @Body() updateDocumentoDto: UpdateDocumentoDto) {
     return this.documentosService.update(id, updateDocumentoDto);
   }
 
   @Delete(':id')
+  @RequirePermissions('documentos:escribir')
   remove(@Param('id') id: string) {
     return this.documentosService.remove(id);
   }

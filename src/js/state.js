@@ -18,17 +18,11 @@ function createStore(initialState) {
 }
 
 export const appState = createStore({
-  currentUser: {
-    id: 'MED-0001',
-    nombre: 'Dr. Carlos Pérez',
-    especialidad: 'Médico General',
-    cedula: '12345678',
-    estado: 'En línea'
-  },
+  currentUser: null,
   route: null,
   sidebarCollapsed: false,
   sidebarExpandedMobile: false,
-  dataReady: false
+  dataReady: false,
 });
 
 export function toggleSidebarCollapsed() {
@@ -37,6 +31,6 @@ export function toggleSidebarCollapsed() {
 
 export function toggleSidebarMobile(force) {
   appState.setState((s) => ({
-    sidebarExpandedMobile: typeof force === 'boolean' ? force : !s.sidebarExpandedMobile
+    sidebarExpandedMobile: typeof force === 'boolean' ? force : !s.sidebarExpandedMobile,
   }));
 }

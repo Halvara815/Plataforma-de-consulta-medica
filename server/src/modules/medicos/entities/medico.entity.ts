@@ -1,8 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, OneToOne } from 'typeorm';
 import { Cita } from '../../citas/entities/cita.entity';
 import { Consulta } from '../../consultas/entities/consulta.entity';
 import { Receta } from '../../recetas/entities/receta.entity';
 import { Estudio } from '../../estudios/entities/estudio.entity';
+import { Usuario } from '../../auth/entities/usuario.entity';
 
 @Entity('medicos')
 export class Medico {
@@ -39,4 +40,7 @@ export class Medico {
 
   @OneToMany(() => Estudio, estudio => estudio.medico)
   estudios: Estudio[];
+
+  @OneToOne(() => Usuario, (usuario) => usuario.medico)
+  usuario: Usuario;
 }

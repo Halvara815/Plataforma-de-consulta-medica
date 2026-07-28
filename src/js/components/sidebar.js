@@ -1,5 +1,5 @@
 import { appState, toggleSidebarCollapsed, toggleSidebarMobile } from '../state.js';
-import { getAll } from '../services/dataService.js';
+import { logout } from '../services/dataService.js';
 import { initials } from '../utils.js';
 import { icon } from '../icons.js';
 import logoUrl from '../../assets/logo.webp';
@@ -16,24 +16,26 @@ const NAV_ITEMS = [
   { route: 'reportes', path: '#/reportes', label: 'Reportes', icon: 'reports' },
   { route: 'calculadora', path: '#/calculadora', label: 'Calculadora', icon: 'calculator' },
   { route: 'herramientas', path: '#/herramientas', label: 'Herramientas', icon: 'wrench' },
-  { route: 'configuracion', path: '#/configuracion', label: 'Configuración', icon: 'settings' }
+  { route: 'configuracion', path: '#/configuracion', label: 'Configuración', icon: 'settings' },
+  { route: 'administracion', path: '#/administracion', label: 'Administración', icon: 'shield', permission: 'usuarios:gestionar' }
 ];
 
 export function mountSidebar(container) {
   function render() {
-    const { route, currentUser, sidebarCollapsed, dataReady } = appState.getState();
+    const { route, currentUser, sidebarCollapsed } = appState.getState();
+    const displayUser = currentUser ?? { nombre: 'Sin sesión', especialidad: 'Acceso requerido' };
     const activeName = route?.name;
     const contextPatientId = PATIENT_CONTEXT_ROUTES.includes(activeName) && route?.params?.id
       ? route.params.id
-      : dataReady
-        ? getAll('pacientes')[0]?.id
-        : undefined;
+      : undefined;
 
-    const navItems = NAV_ITEMS.map((item) =>
+    const navItems = NAV_ITEMS
+      .filter((item) => !item.permission || currentUser?.permisos?.includes(item.permission))
+      .map((item) =>
       item.route === 'historiaClinica'
         ? { ...item, path: contextPatientId ? `#/historia-clinica/${contextPatientId}` : '#/pacientes' }
         : item
-    );
+      );
 
     container.innerHTML = `
       <div class="sidebar-brand">
@@ -56,11 +58,12 @@ export function mountSidebar(container) {
         ${icon(sidebarCollapsed ? 'chevron-right' : 'chevron-left', { size: 16 })}
       </button>
       <div class="sidebar-footer">
-        <span class="sidebar-footer-avatar">${initials(currentUser.nombre)}</span>
+        <span class="sidebar-footer-avatar">${initials(displayUser.nombre)}</span>
         <div class="sidebar-footer-text">
-          <strong>${currentUser.nombre}</strong>
-          <span>${currentUser.especialidad}</span>
+          <strong>${displayUser.nombre}</strong>
+          <span>${displayUser.especialidad || 'Sin especialidad asignada'}</span>
         </div>
+        ${currentUser ? '<button type="button" class="icon-btn" data-action="logout" aria-label="Cerrar sesión" title="Cerrar sesión">↪</button>' : ''}
       </div>
     `;
 
@@ -72,6 +75,17 @@ export function mountSidebar(container) {
       link.addEventListener('click', () => {
         toggleSidebarMobile(false);
       });
+    });
+
+    container.querySelector('[data-action="logout"]')?.addEventListener('click', async () => {
+      try {
+        await logout();
+      } catch {
+        // La sesión local se elimina aunque la red no permita confirmar el cierre en servidor.
+      } finally {
+        appState.setState({ currentUser: null, dataReady: false });
+        window.location.hash = '#/login';
+      }
     });
   }
 

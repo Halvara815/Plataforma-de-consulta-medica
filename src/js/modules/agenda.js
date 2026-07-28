@@ -1,18 +1,24 @@
-import { getAll, getById, getCatalogos, create, update } from '../services/dataService.js';
+import { getAll, getById, getCatalogos, getPage, create, update } from '../services/dataService.js';
 import { setTopbarTitle } from '../components/topbar.js';
 import { cardHtml } from '../components/card.js';
 import { openModal } from '../components/modal.js';
 import { textField, selectField, getFormData, validateRequired } from '../components/form.js';
+import { showToast } from '../components/toast.js';
 import { escapeHtml, formatDate, statusBadgeClass, statusLabel } from '../utils.js';
 import { icon } from '../icons.js';
 
-// Ver nota en dashboard.js: fecha ancla de la demo para que la agenda muestre contenido representativo.
-const DEMO_TODAY = '2026-07-20';
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+function localToday() {
+  const date = new Date();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
 
 let cleanupFns = [];
 let state = {
-  date: DEMO_TODAY,
+  date: localToday(),
   medicoId: '',
   consultorio: '',
   estado: '',
@@ -21,7 +27,14 @@ let state = {
 
 export async function mount(container, params = {}, query = {}) {
   setTopbarTitle('Agenda / Citas', 'Gestione y programe las citas de sus pacientes');
-  state = { date: DEMO_TODAY, medicoId: '', consultorio: '', estado: '', selectedCitaId: null };
+  state = {
+    date: localToday(),
+    medicoId: '',
+    consultorio: '',
+    estado: '',
+    pacienteFiltro: query.pacienteId || '',
+    selectedCitaId: null,
+  };
 
   container.innerHTML = `
     <div class="view">
@@ -73,8 +86,8 @@ export async function mount(container, params = {}, query = {}) {
   document.getElementById('btn-prev-day').addEventListener('click', () => shiftDay(-1));
   document.getElementById('btn-next-day').addEventListener('click', () => shiftDay(1));
   document.getElementById('btn-today').addEventListener('click', async () => {
-    state.date = DEMO_TODAY;
-    document.getElementById('agenda-date-input').value = DEMO_TODAY;
+    state.date = localToday();
+    document.getElementById('agenda-date-input').value = state.date;
     await render();
   });
   ['filter-medico', 'filter-consultorio', 'filter-estado'].forEach((id) => {
@@ -84,10 +97,6 @@ export async function mount(container, params = {}, query = {}) {
       await render();
     });
   });
-
-  if (query.pacienteId) {
-    state.pacienteFiltro = query.pacienteId;
-  }
 }
 
 async function shiftDay(delta) {
@@ -119,14 +128,16 @@ async function populateFilters() {
 }
 
 async function getFilteredCitas() {
-  const allCitas = await getAll('citas');
-  return allCitas
-    .filter((c) => c.fecha === state.date)
-    .filter((c) => !state.medicoId || c.medicoId === state.medicoId)
-    .filter((c) => !state.consultorio || c.consultorioId === state.consultorio)
-    .filter((c) => !state.estado || c.estado === state.estado)
-    .filter((c) => !state.pacienteFiltro || c.pacienteId === state.pacienteFiltro)
-    .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
+  const result = await getPage('citas', {
+    fecha: state.date,
+    medicoId: state.medicoId,
+    consultorioId: state.consultorio,
+    estado: state.estado,
+    pacienteId: state.pacienteFiltro,
+    page: 1,
+    limit: 100,
+  });
+  return result.items || [];
 }
 
 async function render() {
@@ -143,7 +154,7 @@ async function renderList(citas) {
   const el = document.getElementById('agenda-list-container');
   const listHtmlPromises = citas
     .map(async (cita) => {
-      const paciente = cita.pacienteId ? await getById('pacientes', cita.pacienteId) : null;
+      const paciente = cita.paciente || (cita.pacienteId ? await getById('pacientes', cita.pacienteId) : null);
       const label = paciente ? `${paciente.nombre} ${paciente.apellidos}` : cita.motivo;
       return `
         <div class="patient-directory-item${cita.id === state.selectedCitaId ? ' is-active' : ''}" data-cita-id="${cita.id}" style="justify-content:space-between;">
@@ -163,21 +174,12 @@ async function renderList(citas) {
   el.innerHTML = cardHtml({
     title: `Agenda · ${formatDate(state.date)}`,
     bodyHtml: citas.length
-                    <div style="font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(label)}</div>
-                    <div class="text-tertiary" style="font-size:11.5px;">${escapeHtml(paciente ? cita.motivo : cita.consultorioId)}</div>
-                  </div>
-                </div>
-                <span class="badge ${statusBadgeClass(cita.estado)}">${statusLabel(cita.estado)}</span>
-              </div>
-            `;
-          });
-        const listHtml = await Promise.all(listHtmlPromises);
-        return `<div class="stack" id="agenda-list">${listHtml.join('')}</div>`;
-      : '<div class="empty-state">No hay citas para esta fecha con los filtros seleccionados.</div>'
+      ? `<div class="stack" id="agenda-list">${listHtml.join('')}</div>`
+      : '<div class="empty-state">No hay citas para esta fecha con los filtros seleccionados.</div>',
   });
 
   el.querySelectorAll('[data-cita-id]').forEach((row) => {
-    row.addEventListener('click', () => {
+    row.addEventListener('click', async () => {
       state.selectedCitaId = row.dataset.citaId;
       await render();
     });
@@ -190,8 +192,8 @@ async function renderDetail(cita) {
     el.innerHTML = cardHtml({ title: 'Detalle de la cita', bodyHtml: '<div class="empty-state">Selecciona una cita.</div>' });
     return;
   }
-  const paciente = cita.pacienteId ? await getById('pacientes', cita.pacienteId) : null;
-  const medico = await getById('medicos', cita.medicoId);
+  const paciente = cita.paciente || (cita.pacienteId ? await getById('pacientes', cita.pacienteId) : null);
+  const medico = cita.medico || await getById('medicos', cita.medicoId);
 
   el.innerHTML = cardHtml({
     title: 'Detalle de la cita',
@@ -216,7 +218,7 @@ async function renderDetail(cita) {
             ? `<div class="view-actions" style="margin-top:6px;">
                 <a class="btn btn-primary btn-sm" href="#/consulta/${paciente.id}">Iniciar consulta</a>
                 <a class="btn btn-secondary btn-sm" href="#/historia-clinica/${paciente.id}">Historia clínica</a>
-                <button type="button" class="btn btn-danger btn-sm" id="btn-cancelar-cita" ${cita.estado === 'cancelada' ? 'disabled' : ''}>Cancelar cita</button>
+                <button type="button" class="btn btn-danger btn-sm" id="btn-cancelar-cita" ${['cancelada', 'completada'].includes(cita.estado) ? 'disabled' : ''}>Cancelar cita</button>
               </div>`
             : ''
         }
@@ -227,8 +229,13 @@ async function renderDetail(cita) {
   const cancelBtn = document.getElementById('btn-cancelar-cita');
   if (cancelBtn) {
     cancelBtn.addEventListener('click', async () => {
-      await update('citas', cita.id, { estado: 'cancelada' });
-      await render();
+      try {
+        await update('citas', cita.id, { estado: 'cancelada' });
+        showToast({ message: 'Cita cancelada.', tone: 'success' });
+        await render();
+      } catch (error) {
+        showToast({ message: error.message || 'No se pudo cancelar la cita.', tone: 'danger' });
+      }
     });
   }
 }
@@ -285,22 +292,27 @@ async function openNuevaCitaModal() {
         const form = modalEl.querySelector('#form-nueva-cita');
         if (!validateRequired(form)) return;
         const data = getFormData(form);
-        await create('citas', {
-          pacienteId: data.pacienteId,
-          medicoId: data.medicoId,
-          consultorioId: data.consultorioId,
-          fecha: data.fecha,
-          horaInicio: data.horaInicio,
-          horaFin: data.horaFin,
-          motivo: data.motivo,
-          estado: 'confirmada',
-          notas: '',
-          recordatorios: []
-        });
-        close();
-        state.date = data.fecha;
-        document.getElementById('agenda-date-input').value = data.fecha;
-        await render();
+        try {
+          await create('citas', {
+            pacienteId: data.pacienteId,
+            medicoId: data.medicoId,
+            consultorioId: data.consultorioId,
+            fecha: data.fecha,
+            horaInicio: data.horaInicio,
+            horaFin: data.horaFin,
+            motivo: data.motivo,
+            estado: 'confirmada',
+            notas: '',
+            recordatorios: []
+          });
+          close();
+          state.date = data.fecha;
+          document.getElementById('agenda-date-input').value = data.fecha;
+          showToast({ message: 'Cita creada.', tone: 'success' });
+          await render();
+        } catch (error) {
+          showToast({ message: error.message || 'No se pudo guardar la cita.', tone: 'danger' });
+        }
       });
     }
   });

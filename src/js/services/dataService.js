@@ -1,101 +1,212 @@
-const API_URL = 'http://localhost:3000/api/v1';
+const API_URL = (import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, '');
+const REQUEST_TIMEOUT_MS = 10_000;
 
 let readyPromise = null;
+let accessToken = null;
+let refreshPromise = null;
 
-// Helper to make authenticated requests
-async function fetchApi(endpoint, options = {}) {
-  // Try to get token from wherever it is stored in the future (e.g. state or localStorage)
-  // Currently the app uses a global state, but for the fetch we can check localStorage
-  const token = localStorage.getItem('jwt_token') || sessionStorage.getItem('jwt_token');
-  
+export class ApiError extends Error {
+  constructor(message, { status = null, code = 'API_REQUEST_FAILED' } = {}) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+function responseMessage(payload) {
+  const message = payload?.message;
+  if (typeof message === 'string') return message;
+  if (Array.isArray(message)) return message.join(', ');
+  if (message && typeof message.message === 'string') return message.message;
+  return null;
+}
+
+export function userFacingApiError(error) {
+  switch (error?.code) {
+    case 'API_UNAVAILABLE':
+      return 'No se pudo conectar con la API local. Inicia el backend y vuelve a intentarlo.';
+    case 'API_TIMEOUT':
+      return 'La API tardó demasiado en responder. Verifica que PostgreSQL y el backend estén activos.';
+    case 'AUTH_REQUIRED':
+      return 'Inicia sesión para acceder a la información clínica.';
+    case 'LOGIN_FAILED':
+      return 'Correo o contraseña inválidos.';
+    case 'ACCESS_DENIED':
+      return 'Tu cuenta no tiene permiso para abrir esta sección.';
+    case 'TOO_MANY_REQUESTS':
+      return 'Se alcanzó el límite de intentos. Espera unos minutos antes de volver a intentarlo.';
+    case 'SCHEDULE_CONFLICT':
+      return 'El médico o consultorio ya tiene una cita en ese horario.';
+    default:
+      return 'No se pudo cargar la información solicitada. Intenta de nuevo.';
+  }
+}
+
+async function request(endpoint, options = {}, { retryOnUnauthorized = true } = {}) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   const headers = {
     'Content-Type': 'application/json',
-    ...(options.headers || {})
+    ...(options.headers || {}),
   };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  try {
+    const response = await fetch(`${API_URL}/${endpoint}`, {
+      ...options,
+      headers,
+      credentials: 'include',
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      if (response.status === 401 && retryOnUnauthorized && !endpoint.startsWith('auth/')) {
+        try {
+          await restoreSession();
+          return request(endpoint, options, { retryOnUnauthorized: false });
+        } catch {
+          clearAuthSession();
+        }
+      }
+
+      const errorData = await response.json().catch(() => null);
+      const code = response.status === 401
+        ? 'AUTH_REQUIRED'
+        : response.status === 403
+          ? 'ACCESS_DENIED'
+          : response.status === 429
+            ? 'TOO_MANY_REQUESTS'
+            : response.status === 409
+              ? 'SCHEDULE_CONFLICT'
+              : 'API_REQUEST_FAILED';
+      throw new ApiError(
+        responseMessage(errorData) || `La API respondió con estado ${response.status}.`,
+        { status: response.status, code },
+      );
+    }
+
+    if (response.status === 204) return true;
+    return response.json();
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    const code = controller.signal.aborted ? 'API_TIMEOUT' : 'API_UNAVAILABLE';
+    throw new ApiError(userFacingApiError({ code }), { code });
+  } finally {
+    window.clearTimeout(timeoutId);
   }
-
-  const response = await fetch(`${API_URL}/${endpoint}`, {
-    ...options,
-    headers,
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || `Error en la petición: ${response.statusText}`);
-  }
-
-  // If it's a DELETE or empty response, don't try to parse JSON
-  if (response.status === 204) {
-    return true;
-  }
-
-  return response.json();
 }
 
 export async function initDataService() {
   if (!readyPromise) {
-    // Simulamos que el servicio está listo (podría hacer un ping al backend o cargar catálogos base)
-    readyPromise = Promise.resolve(true);
+    readyPromise = request('health', {}, { retryOnUnauthorized: false })
+      .then(() => true)
+      .catch((error) => {
+        readyPromise = null;
+        throw error;
+      });
   }
   return readyPromise;
 }
 
+export async function login(email, password) {
+  try {
+    const result = await request('auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }, { retryOnUnauthorized: false });
+    accessToken = result.accessToken;
+    return result.user;
+  } catch (error) {
+    if (error?.code === 'AUTH_REQUIRED') {
+      throw new ApiError('Credenciales inválidas.', { status: 401, code: 'LOGIN_FAILED' });
+    }
+    throw error;
+  }
+}
+
+export async function restoreSession() {
+  if (!refreshPromise) {
+    refreshPromise = request('auth/refresh', { method: 'POST' }, { retryOnUnauthorized: false })
+      .then((result) => {
+        accessToken = result.accessToken;
+        return result.user;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
+export async function logout() {
+  try {
+    await request('auth/logout', { method: 'POST' }, { retryOnUnauthorized: false });
+  } finally {
+    clearAuthSession();
+  }
+}
+
+export function clearAuthSession() {
+  accessToken = null;
+}
+
+export function isAuthenticated() {
+  return Boolean(accessToken);
+}
+
 export async function getAll(collection) {
-  return fetchApi(collection);
+  const result = await request(collection);
+  return Array.isArray(result) ? result : Array.isArray(result?.items) ? result.items : result;
+}
+
+export async function getPage(collection, params = {}) {
+  const query = new URLSearchParams(
+    Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ''),
+  );
+  const result = await request(`${collection}${query.size ? `?${query.toString()}` : ''}`);
+  if (Array.isArray(result)) {
+    return { items: result, pagination: { page: 1, limit: result.length, total: result.length, totalPages: 1 } };
+  }
+  return result;
 }
 
 export async function getCatalogos() {
-  return fetchApi('catalogos');
+  return request('catalogos');
 }
 
 export async function getById(collection, id) {
-  return fetchApi(`${collection}/${id}`);
+  return request(`${collection}/${id}`);
 }
 
-// Para mantener compatibilidad temporal con componentes que pasaban un callback (predicate),
-// traemos todos y filtramos en memoria. En producción, esto debería pasar a ser query params.
 export async function query(collection, predicate) {
-  const allRecords = await fetchApi(collection);
-  if (typeof predicate === 'function') {
-    return allRecords.filter(predicate);
-  }
-  // Si predicate fuera un string (querystring), podríamos enviarlo directo: fetchApi(`${collection}?${predicate}`)
-  return allRecords;
+  const allRecords = await getAll(collection);
+  return typeof predicate === 'function' ? allRecords.filter(predicate) : allRecords;
 }
 
 export async function create(collection, data) {
-  return fetchApi(collection, {
+  return request(collection, {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
 export async function update(collection, id, patch) {
-  return fetchApi(`${collection}/${id}`, {
+  return request(`${collection}/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(patch),
   });
 }
 
 export async function remove(collection, id) {
-  return fetchApi(`${collection}/${id}`, {
-    method: 'DELETE',
-  });
+  return request(`${collection}/${id}`, { method: 'DELETE' });
 }
 
 export async function resetDemoData() {
-  // El reset en el backend podría llamar a un endpoint especial de seed, 
-  // pero por ahora solo limpiamos tokens
-  localStorage.removeItem('jwt_token');
-  sessionStorage.removeItem('jwt_token');
+  await logout();
   return true;
 }
 
-export function isPersistedCollection(collection) {
-  // Ahora todas las colecciones se persisten en el backend
+export function isPersistedCollection() {
   return true;
 }
-

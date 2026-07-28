@@ -43,7 +43,7 @@ export function createSectionNav({ items, activeId, renderPanel, ariaLabel = 'Na
     });
   }
 
-  function renderCurrentPanel() {
+  async function renderCurrentPanel() {
     if (typeof panelCleanup === 'function') {
       try {
         panelCleanup();
@@ -53,8 +53,13 @@ export function createSectionNav({ items, activeId, renderPanel, ariaLabel = 'Na
     }
     panelCleanup = null;
     panel.innerHTML = '';
-    const result = renderPanel(current, panel);
-    if (typeof result === 'function') panelCleanup = result;
+    try {
+      const result = await renderPanel(current, panel);
+      if (typeof result === 'function') panelCleanup = result;
+    } catch (error) {
+      panel.innerHTML = '<div class="empty-state">No se pudo cargar esta sección.</div>';
+      console.error('Error al cargar la sección', error);
+    }
   }
 
   function setActive(id) {
