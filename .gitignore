@@ -1,0 +1,80 @@
+# Dependencies and package-manager caches
+node_modules/
+.pnp/
+.pnp.*
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# Build output and tool caches (Vite / NestJS / TypeScript)
+dist/
+.vite/
+server/.nestjs/
+*.tsbuildinfo
+
+# Test and coverage output
+coverage/
+backend/coverage/
+.nyc_output/
+test-results/
+playwright-report/
+blob-report/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files and local configuration
+.env
+.env.*
+!.env.example
+!.env.*.example
+docker-compose.override.yml
+
+# Local service data, database exports and file uploads
+postgres-data/
+redis-data/
+server/.data/
+server/uploads/
+uploads/
+*.sql.gz
+*.dump
+
+# Secrets, private certificates and keystores
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Infrastructure tooling state
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+
+# Editor and operating-system files
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.code-workspace
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+.cache/
+.tmp/
+tmp/
+*.bak
+*.swp
+*.swo
