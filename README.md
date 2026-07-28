@@ -39,7 +39,7 @@ El prefijo global es `/api/v1`. Los recursos existentes conservan los nombres de
 - CRUD parcial de `/pacientes`, `/citas`, `/consultas`, `/recetas`, `/estudios` y `/documentos`
 - Lectura de `/catalogos`
 
-La existencia de un endpoint no significa que esté listo para producción. La primera entrega de identidad ya incluye usuarios, roles, permisos, sesiones revocables, límites de login, expiración por inactividad, detección de reutilización de refresh token, administración básica y auditoría append-only. Pacientes y citas ya cuentan con su primer contrato de paginación y reglas de agenda; siguen pendientes OpenAPI, pruebas automatizadas y los controles operativos de producción.
+La existencia de un endpoint no significa que esté listo para producción. La primera entrega de identidad ya incluye usuarios, roles, permisos, sesiones revocables, límites de login, expiración por inactividad, detección de reutilización de refresh token, administración básica y auditoría append-only. Pacientes y citas ya cuentan con su primer contrato de paginación y reglas de agenda, documentadas en OpenAPI (`GET /api/docs`) y cubiertas por pruebas de integración (`npm run test:e2e`); el resto de los recursos (`consultas`, `recetas`, `estudios`, `documentos`) todavía no tiene su propio contrato, pruebas automatizadas ni controles operativos de producción.
 
 ### Listados de Fase 3
 
@@ -123,9 +123,11 @@ Las fases se entregan en cortes verticales: contrato OpenAPI → migración → 
 - Implementado: `/pacientes` y `/citas` admiten paginación, filtros y búsqueda autorizada desde el backend; la interfaz de Pacientes y Agenda los consume directamente.
 - Implementado: las consultas de agenda traen médico y paciente asociados, por lo que se eliminaron lecturas adicionales por cada cita. La fecha inicial de Agenda ya usa el día local y el filtro por paciente se aplica antes de cargar la vista.
 - Implementado: la creación y edición de citas se ejecutan en una transacción, toman bloqueos transaccionales de PostgreSQL por médico/fecha y consultorio/fecha, rechazan solapes con `409` y validan las transiciones `pendiente → confirmada → en_consulta → completada` o cancelación desde los estados no finales.
-- Pendiente: contrato OpenAPI y pruebas automatizadas de integración/extremo a extremo para todos los casos clínicos.
+- Implementado: contrato OpenAPI de `/pacientes` y `/citas` servido en `GET /api/docs` (deshabilitado cuando `NODE_ENV=production`).
+- Implementado: pruebas automatizadas de integración (`npm run test:e2e` en `server/`) contra una base PostgreSQL de pruebas real y aislada, cubriendo paginación, búsqueda, filtros, solapes (`409`), transiciones de estado (`400`) y autorización (`401`/`403`) de `pacientes` y `citas`.
+- Pendiente: extender el contrato OpenAPI y las pruebas automatizadas a `consultas`, `recetas`, `estudios` y `documentos` cuando esos módulos reciban su propio corte funcional (Fase 4).
 
-**Salida parcial verificada:** buscar paciente, filtrar la agenda y rechazar un solape o transición inválida funciona contra la base local autenticada. Falta completar las pruebas automatizadas y la navegación visual antes de declarar terminada la fase.
+**Salida verificada:** buscar paciente, filtrar la agenda y rechazar un solape o transición inválida funciona contra la base local autenticada, y queda cubierto por pruebas automatizadas repetibles. Falta la navegación visual de extremo a extremo (Playwright u otra herramienta de UI), que se abordará junto con el resto de los módulos clínicos.
 
 ### Fase 4 — Núcleo clínico
 
@@ -175,9 +177,18 @@ npm run start:dev
 npm run build
 npm run migration:run
 npm run seed:dev
+npm run test:e2e
 ```
 
 `npm run seed:dev` carga una colección pequeña de médicos, pacientes, registros clínicos, roles, permisos y una cuenta de acceso **sintéticos** para desarrollo. Es repetible: no borra registros existentes ni duplica las entradas de demostración. Las credenciales locales se definen en las variables ignoradas `DEV_SEED_ADMIN_EMAIL` y `DEV_SEED_ADMIN_PASSWORD`; no debe ejecutarse en una base con datos reales.
+
+`npm run test:e2e` corre las pruebas de integración de `pacientes` y `citas` contra una base PostgreSQL de pruebas separada (`<DB_NAME>_test` en la misma instancia que usa `server/.env`), que se crea y migra sola la primera vez. El usuario de `DB_USERNAME` necesita privilegio `CREATEDB`; si no lo tiene, crea la base manualmente una vez con:
+
+```sql
+CREATE DATABASE "<DB_NAME>_test" OWNER "<DB_USERNAME>";
+```
+
+La suite trunca todas las tablas entre pruebas, así que nunca debe apuntarse a la base de desarrollo o a una con datos reales. Con Swagger UI (`GET /api/docs`, deshabilitado en `NODE_ENV=production`) puedes explorar visualmente el contrato de `pacientes` y `citas`.
 
 ### Servicios locales
 
