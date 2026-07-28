@@ -1,11 +1,10 @@
 import './theme.js';
 import { initTheme } from './theme.js';
 import { appState, toggleSidebarMobile } from './state.js';
-import { initDataService, restoreSession, userFacingApiError } from './services/dataService.js';
+import { initDataService, restoreSession } from './services/dataService.js';
 import { mountSidebar } from './components/sidebar.js';
 import { mountTopbar } from './components/topbar.js';
-import { initRouter } from './router.js';
-import { escapeHtml } from './utils.js';
+import { initRouter, navigateTo } from './router.js';
 
 initTheme();
 
@@ -43,29 +42,24 @@ function syncShellClasses() {
 syncShellClasses();
 appState.subscribe(syncShellClasses);
 
-async function bootstrap() {
-  contentEl.innerHTML = '<div class="loading-state">Comprobando conexión segura…</div>';
+async function restoreExistingSession() {
   try {
     await initDataService();
-    let currentUser = null;
-    try {
-      currentUser = await restoreSession();
-    } catch (error) {
-      if (error?.code !== 'AUTH_REQUIRED') throw error;
-    }
-    appState.setState({ currentUser, dataReady: Boolean(currentUser) });
-    initRouter(contentEl);
-  } catch (err) {
-    console.error('No se pudo iniciar el cliente de datos', err);
-    contentEl.innerHTML = `
-      <section class="empty-state" role="alert">
-        <h1>No se pudo conectar con el sistema</h1>
-        <p>${escapeHtml(userFacingApiError(err))}</p>
-        <button type="button" class="btn btn-secondary" data-action="retry-bootstrap">Reintentar</button>
-      </section>
-    `;
-    contentEl.querySelector('[data-action="retry-bootstrap"]')?.addEventListener('click', bootstrap);
+    const currentUser = await restoreSession();
+    appState.setState({ currentUser, dataReady: true });
+    navigateTo('#/dashboard');
+  } catch (error) {
+    // Abrir sin sesión y con la API apagada es válido: el formulario permanece disponible.
+    console.info('No hay sesión restaurable o la API local aún no está disponible.', error);
   }
+}
+
+function bootstrap() {
+  // El login se monta primero para que Live Server no bloquee el acceso visual
+  // mientras NestJS inicia o no existe todavía una sesión.
+  appState.setState({ currentUser: null, dataReady: false });
+  initRouter(contentEl);
+  void restoreExistingSession();
 }
 
 bootstrap();

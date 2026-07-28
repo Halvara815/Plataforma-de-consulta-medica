@@ -44,6 +44,7 @@ export class UsuariosService {
     }
 
     const roles = await this.resolveRoles(dto.roleNames);
+    await this.ensureSingleAdminRole(roles);
     const medicoId = await this.resolveMedico(dto.medicoId);
     const usuario = this.usuariosRepository.create({
       email,
@@ -63,6 +64,7 @@ export class UsuariosService {
 
     const roles = dto.roleNames ? await this.resolveRoles(dto.roleNames) : usuario.roles;
     const estado = dto.estado ?? usuario.estado;
+    await this.ensureSingleAdminRole(roles, usuario.id);
     await this.ensureAdminRemainsAvailable(usuario, roles, estado);
 
     if (dto.email) {
@@ -130,6 +132,19 @@ export class UsuariosService {
       .getCount();
     if (activeAdmins <= 1) {
       throw new BadRequestException('Debe permanecer al menos un administrador activo');
+    }
+  }
+
+  private async ensureSingleAdminRole(roles: Rol[], currentUserId?: string): Promise<void> {
+    if (!roles.some((rol) => rol.nombre === 'ADMIN')) return;
+
+    const query = this.usuariosRepository
+      .createQueryBuilder('usuario')
+      .innerJoin('usuario.roles', 'rol', 'rol.nombre = :adminRole', { adminRole: 'ADMIN' });
+    if (currentUserId) query.where('usuario.id <> :currentUserId', { currentUserId });
+
+    if (await query.getCount() > 0) {
+      throw new BadRequestException('Solo puede existir una cuenta administradora');
     }
   }
 

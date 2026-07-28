@@ -79,6 +79,33 @@ describe('Estudios (e2e)', () => {
       .expect(403);
   });
 
+  it('solo permite transiciones válidas del estudio', async () => {
+    const { medico, token } = await medicoConToken();
+    const paciente = await createPaciente(dataSource);
+    const estudio = await crearEstudio(token, paciente.id, medico.id).expect(201);
+
+    await request(app.getHttpServer())
+      .patch(`/api/v1/estudios/${estudio.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ estado: 'completado' })
+      .expect(400);
+    await request(app.getHttpServer())
+      .patch(`/api/v1/estudios/${estudio.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ estado: 'en_proceso' })
+      .expect(200);
+    await request(app.getHttpServer())
+      .patch(`/api/v1/estudios/${estudio.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ estado: 'completado' })
+      .expect(200);
+    await request(app.getHttpServer())
+      .patch(`/api/v1/estudios/${estudio.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ notas: 'No debe editarse' })
+      .expect(400);
+  });
+
   it('rechaza listar estudios sin pacienteId con 400', async () => {
     const { token } = await medicoConToken();
 

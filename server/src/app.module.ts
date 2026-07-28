@@ -16,6 +16,7 @@ import { AuthorizationModule } from './modules/auth/authorization.module';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { AuditService } from './modules/auth/audit.service';
 import { UsuariosModule } from './modules/usuarios/usuarios.module';
+import { IndicadoresModule } from './modules/indicadores/indicadores.module';
 
 
 
@@ -61,6 +62,7 @@ import { UsuariosModule } from './modules/usuarios/usuarios.module';
     DocumentosModule,
     HealthModule,
     UsuariosModule,
+    IndicadoresModule,
   ],
   controllers: [],
   providers: [

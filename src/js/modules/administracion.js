@@ -5,10 +5,14 @@ import { create, getAll, update, userFacingApiError } from '../services/dataServ
 import { escapeHtml, formatDate, statusBadgeClass } from '../utils.js';
 
 let cleanupFns = [];
+const catalogTypes = [
+  'diagnosticosCIE10', 'medicamentos', 'interaccionesConocidas', 'especialidades',
+  'consultorios', 'aseguradoras', 'estadosCita', 'categoriasDocumento', 'estudiosCatalogo'
+];
 
 export async function mount(container) {
   const { currentUser } = appState.getState();
-  setTopbarTitle('Administración', 'Usuarios, roles y bitácora de seguridad');
+  setTopbarTitle('Administración', 'Cuentas, médicos y bitácora de seguridad');
 
   if (!currentUser?.permisos?.includes('usuarios:gestionar')) {
     container.innerHTML = `
@@ -20,13 +24,18 @@ export async function mount(container) {
     return;
   }
 
+  const canManageCatalogs = currentUser.permisos.includes('catalogos:gestionar');
   const load = async () => {
-    const [users, roles, audit] = await Promise.all([
+    const [users, roles, audit, medicos, entries] = await Promise.all([
       getAll('usuarios'),
       getAll('usuarios/roles'),
       getAll('auditoria?limit=20'),
+      getAll('medicos'),
+      canManageCatalogs
+        ? Promise.all(catalogTypes.map(async (type) => [type, await getAll(`catalogos/entradas/${type}`)]))
+        : Promise.resolve([]),
     ]);
-    render(container, users, roles, audit.items || [], load);
+    render(container, users, roles, audit.items || [], medicos, Object.fromEntries(entries), canManageCatalogs, load);
   };
 
   try {
@@ -43,7 +52,7 @@ export async function mount(container) {
   }
 }
 
-function render(container, users, roles, auditEvents, reload) {
+function render(container, users, roles, auditEvents, medicos, catalogEntries, canManageCatalogs, reload) {
   cleanupFns.forEach((fn) => fn());
   cleanupFns = [];
   container.innerHTML = `
@@ -58,12 +67,16 @@ function render(container, users, roles, auditEvents, reload) {
       <div class="two-col">
         <div class="stack">
           ${cardHtml({
-            title: 'Crear usuario',
+            title: 'Crear usuario de apoyo',
             bodyHtml: createUserForm(roles),
           })}
           ${cardHtml({
             title: `Usuarios (${users.length})`,
             bodyHtml: users.length ? users.map((user) => userCard(user, roles)).join('') : '<p class="text-tertiary">No hay usuarios registrados.</p>',
+          })}
+          ${cardHtml({
+            title: `Perfiles médicos y solicitudes (${medicos.length})`,
+            bodyHtml: medicos.length ? medicos.map(medicoCard).join('') : '<p class="text-tertiary">No hay médicos registrados.</p>',
           })}
         </div>
         <div class="stack">
@@ -81,6 +94,10 @@ function render(container, users, roles, auditEvents, reload) {
             title: 'Actividad reciente',
             bodyHtml: auditEvents.length ? auditEvents.map(auditRow).join('') : '<p class="text-tertiary">No hay eventos disponibles.</p>',
           })}
+          ${canManageCatalogs ? cardHtml({
+            title: 'Catálogos clínicos',
+            bodyHtml: catalogosCard(catalogEntries),
+          }) : ''}
         </div>
       </div>
     </div>
@@ -139,6 +156,131 @@ function render(container, users, roles, auditEvents, reload) {
     form.addEventListener('submit', onUpdate);
     cleanupFns.push(() => form.removeEventListener('submit', onUpdate));
   });
+
+  container.querySelectorAll('[data-medico-form]').forEach((form) => {
+    const onMedicoUpdate = async (event) => {
+      event.preventDefault();
+      const target = event.currentTarget;
+      const submit = target.querySelector('button[type="submit"]');
+      const status = target.querySelector('[data-form-status]');
+      submit.disabled = true;
+      status.textContent = 'Guardando perfil médico…';
+      try {
+        const data = new FormData(target);
+        await update('medicos', target.dataset.medicoForm, {
+          nombre: data.get('nombre'),
+          especialidad: data.get('especialidad'),
+          cedula: data.get('cedula'),
+          consultorio: data.get('consultorio'),
+          estado: data.get('estado'),
+        });
+        await reload();
+      } catch (error) {
+        status.textContent = userFacingApiError(error);
+        submit.disabled = false;
+      }
+    };
+    form.addEventListener('submit', onMedicoUpdate);
+    cleanupFns.push(() => form.removeEventListener('submit', onMedicoUpdate));
+  });
+
+  const catalogForm = container.querySelector('#catalog-form');
+  const onCatalogCreate = async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const status = form.querySelector('[data-catalog-status]');
+    const submit = form.querySelector('button[type="submit"]');
+    const data = new FormData(form);
+    let metadata;
+    try {
+      const rawMetadata = String(data.get('metadata') || '').trim();
+      metadata = rawMetadata ? JSON.parse(rawMetadata) : undefined;
+      if (metadata !== undefined && (Array.isArray(metadata) || typeof metadata !== 'object' || metadata === null)) {
+        throw new Error('Los metadatos deben ser un objeto JSON.');
+      }
+    } catch (error) {
+      status.textContent = error.message || 'Los metadatos no son JSON válido.';
+      return;
+    }
+    submit.disabled = true;
+    status.textContent = 'Guardando…';
+    try {
+      await create('catalogos/entradas', {
+        tipo: data.get('tipo'),
+        codigo: data.get('codigo'),
+        nombre: data.get('nombre'),
+        estado: data.get('estado'),
+        ...(metadata === undefined ? {} : { metadata }),
+      });
+      await reload();
+    } catch (error) {
+      status.textContent = userFacingApiError(error);
+      submit.disabled = false;
+    }
+  };
+  catalogForm?.addEventListener('submit', onCatalogCreate);
+  cleanupFns.push(() => catalogForm?.removeEventListener('submit', onCatalogCreate));
+
+  container.querySelectorAll('[data-catalog-toggle]').forEach((button) => {
+    const onToggle = async () => {
+      button.disabled = true;
+      try {
+        await update('catalogos/entradas', button.dataset.catalogToggle, {
+          estado: button.dataset.catalogState === 'activo' ? 'inactivo' : 'activo',
+        });
+        await reload();
+      } catch (error) {
+        button.disabled = false;
+        alert(userFacingApiError(error));
+      }
+    };
+    button.addEventListener('click', onToggle);
+    cleanupFns.push(() => button.removeEventListener('click', onToggle));
+  });
+}
+
+function catalogosCard(entriesByType) {
+  const typeOptions = catalogTypes
+    .map((type) => `<option value="${type}">${escapeHtml(catalogLabel(type))}</option>`)
+    .join('');
+  const lists = catalogTypes
+    .map((type) => {
+      const entries = entriesByType[type] || [];
+      return `
+        <details style="border-top:1px solid var(--border-color, #e5e7eb); padding:8px 0;">
+          <summary style="cursor:pointer; font-size:13px;">${escapeHtml(catalogLabel(type))} (${entries.length})</summary>
+          <div class="stack" style="gap:6px; margin-top:8px;">
+            ${entries.length ? entries.map((entry) => `
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:12px;">
+                <span><strong>${escapeHtml(entry.codigo)}</strong> · ${escapeHtml(entry.nombre)}</span>
+                <button type="button" class="btn btn-ghost btn-sm" data-catalog-toggle="${escapeHtml(entry.id)}" data-catalog-state="${escapeHtml(entry.estado)}">${entry.estado === 'activo' ? 'Desactivar' : 'Activar'}</button>
+              </div>
+            `).join('') : '<span class="text-tertiary" style="font-size:12px;">Sin entradas.</span>'}
+          </div>
+        </details>`;
+    })
+    .join('');
+  return `
+    <form id="catalog-form" class="stack" style="gap:8px; padding-bottom:12px;">
+      <p class="text-tertiary" style="font-size:12px; margin:0;">Las entradas inactivas no aparecen en los formularios clínicos, pero se conservan para trazabilidad.</p>
+      <label>Tipo<select class="form-input" name="tipo">${typeOptions}</select></label>
+      <label>Código<input class="form-input" name="codigo" required maxlength="120" placeholder="Ej. A10-001" /></label>
+      <label>Nombre<input class="form-input" name="nombre" required maxlength="500" /></label>
+      <label>Metadatos JSON <span class="text-tertiary" style="font-size:11px;">(opcional)</span><input class="form-input" name="metadata" placeholder='{"presentaciones":["500 mg"]}' /></label>
+      <label>Estado<select class="form-input" name="estado"><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></label>
+      <button class="btn btn-secondary" type="submit">Agregar entrada</button>
+      <p class="text-tertiary" data-catalog-status style="font-size:12px; margin:0;"></p>
+    </form>
+    <div>${lists}</div>
+  `;
+}
+
+function catalogLabel(type) {
+  return {
+    diagnosticosCIE10: 'Diagnósticos CIE-10', medicamentos: 'Medicamentos', interaccionesConocidas: 'Interacciones',
+    especialidades: 'Especialidades', consultorios: 'Consultorios', aseguradoras: 'Aseguradoras',
+    estadosCita: 'Estados de cita', categoriasDocumento: 'Categorías de documento', estudiosCatalogo: 'Estudios',
+  }[type] || type;
 }
 
 function createUserForm(roles) {
@@ -174,13 +316,51 @@ function userCard(user, roles) {
   `;
 }
 
+function medicoCard(medico) {
+  return `
+    <form class="stack" data-medico-form="${escapeHtml(medico.id)}" style="padding:16px; border-bottom:1px solid var(--border-color, #e5e7eb); gap:9px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <strong>${escapeHtml(medico.nombre)}</strong>
+        <span class="badge ${statusBadgeClass(medico.estado)}">${escapeHtml(medico.estado)}</span>
+      </div>
+      <label>Nombre<input class="form-input" name="nombre" required maxlength="120" value="${escapeHtml(medico.nombre)}" /></label>
+      <label>Especialidad<input class="form-input" name="especialidad" required maxlength="120" value="${escapeHtml(medico.especialidad)}" /></label>
+      <label>Cédula profesional<input class="form-input" name="cedula" required maxlength="80" value="${escapeHtml(medico.cedula)}" /></label>
+      <label>Consultorio<input class="form-input" name="consultorio" maxlength="120" value="${escapeHtml(medico.consultorio || '')}" /></label>
+      <label>Estado<select class="form-input" name="estado">
+        <option value="pendiente" ${medico.estado === 'pendiente' ? 'selected' : ''}>Pendiente de aprobación</option>
+        <option value="activo" ${medico.estado === 'activo' ? 'selected' : ''}>Activo</option>
+        <option value="inactivo" ${medico.estado === 'inactivo' ? 'selected' : ''}>Inactivo</option>
+      </select></label>
+      <p class="text-tertiary" style="font-size:12px; margin:0;">Al activar o desactivar, el acceso de la cuenta médica se actualiza al mismo tiempo.</p>
+      <button class="btn btn-secondary" type="submit">Guardar perfil médico</button>
+      <p class="text-tertiary" data-form-status style="font-size:12px; margin:0;"></p>
+    </form>
+  `;
+}
+
 function roleCheckboxes(roles, assigned = new Set()) {
-  return roles.map((role, index) => `
-    <label class="radio-option" style="margin-right:12px;">
-      <input type="checkbox" name="roleNames" value="${escapeHtml(role.nombre)}" ${assigned.has(role.nombre) || (!assigned.size && index === 0) ? 'checked' : ''} />
-      ${escapeHtml(role.nombre)}
-    </label>
-  `).join('');
+  const defaultRole = roles.find((role) => role.nombre !== 'ADMIN')?.nombre;
+  return roles.map((role) => {
+    if (role.nombre === 'ADMIN') {
+      if (!assigned.has('ADMIN')) {
+        return '<span class="text-tertiary" style="font-size:12px; margin-right:12px;">ADMIN se administra durante el aprovisionamiento inicial.</span>';
+      }
+      return `
+        <label class="radio-option" style="margin-right:12px;">
+          <input type="hidden" name="roleNames" value="ADMIN" />
+          <input type="checkbox" checked disabled />
+          ADMIN <span class="text-tertiary" style="font-size:11px;">(único administrador)</span>
+        </label>
+      `;
+    }
+    return `
+      <label class="radio-option" style="margin-right:12px;">
+        <input type="checkbox" name="roleNames" value="${escapeHtml(role.nombre)}" ${assigned.has(role.nombre) || (!assigned.size && role.nombre === defaultRole) ? 'checked' : ''} />
+        ${escapeHtml(role.nombre)}
+      </label>
+    `;
+  }).join('');
 }
 
 function auditRow(event) {

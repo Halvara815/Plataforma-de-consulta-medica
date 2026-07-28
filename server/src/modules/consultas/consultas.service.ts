@@ -11,6 +11,7 @@ import { CreateConsultaDto } from './dto/create-consulta.dto';
 import { UpdateConsultaDto } from './dto/update-consulta.dto';
 import { AuthenticatedUser } from '../auth/auth.service';
 import { ClinicalReferencesService } from '../../common/validators/clinical-references.service';
+import { CatalogosService } from '../catalogos/catalogos.service';
 
 @Injectable()
 export class ConsultasService {
@@ -19,6 +20,7 @@ export class ConsultasService {
     private readonly consultasRepository: Repository<Consulta>,
     private readonly dataSource: DataSource,
     private readonly clinicalReferences: ClinicalReferencesService,
+    private readonly catalogosService: CatalogosService,
   ) {}
 
   async create(createConsultaDto: CreateConsultaDto, currentUser: AuthenticatedUser): Promise<Consulta> {
@@ -31,9 +33,14 @@ export class ConsultasService {
         pacienteId: createConsultaDto.pacienteId,
         medicoId: createConsultaDto.medicoId,
       });
+      await this.catalogosService.assertDiagnosticCodesActive(
+        manager,
+        (createConsultaDto.diagnosticos ?? []).map((diagnostico) => diagnostico.cie10),
+      );
 
       const consulta = manager.create(Consulta, {
         ...createConsultaDto,
+        signosVitales: this.normalizeVitalSigns(createConsultaDto.signosVitales),
         estado: createConsultaDto.estado ?? 'en_curso',
       });
       return manager.save(consulta);
@@ -85,8 +92,30 @@ export class ConsultasService {
         });
       }
 
+      if (updateConsultaDto.diagnosticos) {
+        await this.catalogosService.assertDiagnosticCodesActive(
+          manager,
+          updateConsultaDto.diagnosticos.map((diagnostico) => diagnostico.cie10),
+        );
+      }
+
       Object.assign(consulta, updateConsultaDto);
+      if (updateConsultaDto.signosVitales) {
+        consulta.signosVitales = this.normalizeVitalSigns(updateConsultaDto.signosVitales);
+      }
       return manager.save(consulta);
     });
+  }
+
+  private normalizeVitalSigns(signosVitales?: object): Record<string, unknown> | undefined {
+    if (!signosVitales) return undefined;
+    const normalized: Record<string, unknown> = { ...signosVitales };
+    const peso = typeof normalized.peso === 'number' ? normalized.peso : null;
+    const talla = typeof normalized.talla === 'number' ? normalized.talla : null;
+    if (peso && talla) {
+      const tallaMetros = talla / 100;
+      normalized.imc = Number((peso / (tallaMetros * tallaMetros)).toFixed(1));
+    }
+    return normalized;
   }
 }

@@ -132,6 +132,39 @@ describe('Consultas (e2e)', () => {
       .expect(400);
   });
 
+  it('valida signos vitales y diagnósticos estructurados', async () => {
+    const { medico, token } = await medicoConToken();
+    const paciente = await createPaciente(dataSource);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/consultas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        pacienteId: paciente.id,
+        medicoId: medico.id,
+        fecha: new Date().toISOString(),
+        tipo: 'seguimiento',
+        signosVitales: { fc: 12 },
+      })
+      .expect(400);
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/consultas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        pacienteId: paciente.id,
+        medicoId: medico.id,
+        fecha: new Date().toISOString(),
+        tipo: 'seguimiento',
+        signosVitales: { ta: '120/80', fc: 72, fr: 16, temp: 36.5, spo2: 98, peso: 70, talla: 175 },
+        diagnosticos: [{ cie10: 'I10', descripcion: 'Hipertensión esencial (primaria)', tipo: 'definitivo', principal: true }],
+      })
+      .expect(201);
+
+    expect(response.body.signosVitales.imc).toBe(22.9);
+    expect(response.body.diagnosticos[0].cie10).toBe('I10');
+  });
+
   it('rechaza listar consultas sin pacienteId con 400', async () => {
     const { token } = await medicoConToken();
 

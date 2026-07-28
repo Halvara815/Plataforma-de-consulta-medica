@@ -76,6 +76,8 @@ async function run(): Promise<void> {
         ['documentos:leer', 'Consultar documentos'],
         ['documentos:escribir', 'Cargar y modificar documentos'],
         ['usuarios:gestionar', 'Administrar usuarios y roles'],
+        ['catalogos:leer', 'Consultar catálogos clínicos'],
+        ['catalogos:gestionar', 'Administrar catálogos clínicos'],
         ['auditoria:leer', 'Consultar auditoría'],
       ] as const;
       const permisosPorClave: Record<string, Permiso> = {};
@@ -91,11 +93,12 @@ async function run(): Promise<void> {
         'recetas:leer', 'recetas:escribir',
         'estudios:leer', 'estudios:escribir',
         'documentos:leer', 'documentos:escribir',
+        'catalogos:leer',
       ];
       const definicionesRoles = [
         { nombre: 'ADMIN', descripcion: 'Administración completa de desarrollo', permisos: Object.keys(permisosPorClave) },
         { nombre: 'MEDICO', descripcion: 'Atención clínica', permisos: permisosMedico },
-        { nombre: 'ASISTENTE', descripcion: 'Apoyo administrativo', permisos: ['pacientes:leer', 'pacientes:escribir', 'citas:leer', 'citas:escribir'] },
+        { nombre: 'ASISTENTE', descripcion: 'Apoyo administrativo', permisos: ['pacientes:leer', 'pacientes:escribir', 'citas:leer', 'citas:escribir', 'catalogos:leer'] },
       ];
       const rolesPorNombre: Record<string, Rol> = {};
       for (const definicionRol of definicionesRoles) {

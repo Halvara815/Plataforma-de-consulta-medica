@@ -1,4 +1,8 @@
-const API_URL = (import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, '');
+const configuredApiUrl = import.meta.env?.VITE_API_URL;
+const isViteServer = ['5173', '4173'].includes(window.location.port);
+const localApiUrl = `${window.location.protocol}//${window.location.hostname}:3000/api/v1`;
+// Vite usa su proxy; Live Server no lo tiene y por eso llega a NestJS directamente.
+const API_URL = (configuredApiUrl || (isViteServer ? '/api/v1' : localApiUrl)).replace(/\/$/, '');
 const REQUEST_TIMEOUT_MS = 10_000;
 
 let readyPromise = null;
@@ -38,6 +42,10 @@ export function userFacingApiError(error) {
       return 'Se alcanzó el límite de intentos. Espera unos minutos antes de volver a intentarlo.';
     case 'SCHEDULE_CONFLICT':
       return 'El médico o consultorio ya tiene una cita en ese horario.';
+    case 'REGISTRATION_CONFLICT':
+      return error.message || 'Ya existe una cuenta o cédula con esos datos.';
+    case 'API_REQUEST_FAILED':
+      return error.message || 'No se pudo procesar la solicitud.';
     default:
       return 'No se pudo cargar la información solicitada. Intenta de nuevo.';
   }
@@ -125,6 +133,20 @@ export async function login(email, password) {
   }
 }
 
+export async function registerDoctor(data) {
+  try {
+    return await request('auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, { retryOnUnauthorized: false });
+  } catch (error) {
+    if (error?.status === 409) {
+      throw new ApiError(error.message, { status: error.status, code: 'REGISTRATION_CONFLICT' });
+    }
+    throw error;
+  }
+}
+
 export async function restoreSession() {
   if (!refreshPromise) {
     refreshPromise = request('auth/refresh', { method: 'POST' }, { retryOnUnauthorized: false })
@@ -155,16 +177,20 @@ export function isAuthenticated() {
   return Boolean(accessToken);
 }
 
-export async function getAll(collection) {
-  const result = await request(collection);
+function withQuery(collection, params = {}) {
+  const search = new URLSearchParams(
+    Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ''),
+  );
+  return `${collection}${search.size ? `?${search.toString()}` : ''}`;
+}
+
+export async function getAll(collection, params = {}) {
+  const result = await request(withQuery(collection, params));
   return Array.isArray(result) ? result : Array.isArray(result?.items) ? result.items : result;
 }
 
 export async function getPage(collection, params = {}) {
-  const query = new URLSearchParams(
-    Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ''),
-  );
-  const result = await request(`${collection}${query.size ? `?${query.toString()}` : ''}`);
+  const result = await request(withQuery(collection, params));
   if (Array.isArray(result)) {
     return { items: result, pagination: { page: 1, limit: result.length, total: result.length, totalPages: 1 } };
   }
@@ -179,9 +205,17 @@ export async function getById(collection, id) {
   return request(`${collection}/${id}`);
 }
 
-export async function query(collection, predicate) {
-  const allRecords = await getAll(collection);
+export async function query(collection, predicate, params = {}) {
+  const allRecords = await getAll(collection, params);
   return typeof predicate === 'function' ? allRecords.filter(predicate) : allRecords;
+}
+
+export async function getDashboardMetrics(params = {}) {
+  return request(withQuery('indicadores/dashboard', params));
+}
+
+export async function getReportMetrics() {
+  return request('indicadores/reportes');
 }
 
 export async function create(collection, data) {

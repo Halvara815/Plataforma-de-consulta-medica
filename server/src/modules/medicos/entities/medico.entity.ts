@@ -16,7 +16,7 @@ export class Medico {
   @Column()
   especialidad: string;
 
-  @Column()
+  @Column({ unique: true })
   cedula: string;
 
   @Column({ nullable: true })

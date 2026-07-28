@@ -13,12 +13,14 @@ import { AuditService } from './audit.service';
 import { LoginRateLimitService } from './login-rate-limit.service';
 import { RedisModule } from '../../common/redis/redis.module';
 import { RefreshToken } from './entities/refresh-token.entity';
+import { Medico } from '../medicos/entities/medico.entity';
+import { Rol } from './entities/rol.entity';
 
 @Global()
 @Module({
   imports: [
     RedisModule,
-    TypeOrmModule.forFeature([Usuario, Sesion, RefreshToken, Auditoria]),
+    TypeOrmModule.forFeature([Usuario, Sesion, RefreshToken, Auditoria, Medico, Rol]),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

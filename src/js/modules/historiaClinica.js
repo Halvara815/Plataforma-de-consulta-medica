@@ -8,7 +8,7 @@ import { icon } from '../icons.js';
 let cleanupFns = [];
 
 export async function mount(container, params = {}) {
-  const paciente = getById('pacientes', params.id);
+  const paciente = await getById('pacientes', params.id);
 
   if (!paciente) {
     container.innerHTML = '<div class="empty-state">Paciente no encontrado.</div>';
@@ -17,13 +17,14 @@ export async function mount(container, params = {}) {
 
   setTopbarTitle('Historia Clínica', 'Registro clínico completo y longitudinal del paciente');
 
-  const consultas = queryCollection('consultas', (c) => c.pacienteId === paciente.id).sort(
+  const consultas = (await queryCollection('consultas', null, { pacienteId: paciente.id })).sort(
     (a, b) => new Date(b.fecha) - new Date(a.fecha)
   );
-  const estudios = queryCollection('estudios', (e) => e.pacienteId === paciente.id).sort(
+  const estudios = (await queryCollection('estudios', null, { pacienteId: paciente.id })).sort(
     (a, b) => new Date(b.fecha) - new Date(a.fecha)
   );
   const ultima = consultas[0] || null;
+  const signosVitales = ultima?.signosVitales || {};
 
   container.innerHTML = `
     <div class="view">
@@ -67,7 +68,7 @@ export async function mount(container, params = {}) {
                     <div class="timeline-item">
                       <div class="text-tertiary" style="font-size:11px;">${formatDate(c.fecha, { withTime: true })}</div>
                       <div style="font-size:13px; font-weight:600;">${escapeHtml(c.motivoConsulta)}</div>
-                      <div class="text-tertiary" style="font-size:11.5px;">${escapeHtml(medicoNombre(c.medicoId))}</div>
+                      <div class="text-tertiary" style="font-size:11.5px;">${escapeHtml(c.medico?.nombre || '')}</div>
                     </div>`
                     )
                     .join('')}
@@ -80,14 +81,14 @@ export async function mount(container, params = {}) {
                   title: `Signos vitales (${formatDate(ultima.fecha, { withTime: true })})`,
                   bodyHtml: `
                     <div class="info-grid">
-                      <div class="info-item"><div class="info-label">TA</div><div class="info-value">${escapeHtml(ultima.signosVitales.ta)} mmHg</div></div>
-                      <div class="info-item"><div class="info-label">FC</div><div class="info-value">${ultima.signosVitales.fc} lpm</div></div>
-                      <div class="info-item"><div class="info-label">FR</div><div class="info-value">${ultima.signosVitales.fr} rpm</div></div>
-                      <div class="info-item"><div class="info-label">Temp.</div><div class="info-value">${ultima.signosVitales.temp} °C</div></div>
-                      <div class="info-item"><div class="info-label">SpO₂</div><div class="info-value">${ultima.signosVitales.spo2} %</div></div>
-                      <div class="info-item"><div class="info-label">Peso</div><div class="info-value">${ultima.signosVitales.peso} kg</div></div>
-                      <div class="info-item"><div class="info-label">Talla</div><div class="info-value">${ultima.signosVitales.talla} cm</div></div>
-                      <div class="info-item"><div class="info-label">IMC</div><div class="info-value">${ultima.signosVitales.imc} kg/m²</div></div>
+                      <div class="info-item"><div class="info-label">TA</div><div class="info-value">${escapeHtml(String(signosVitales.ta ?? '—'))} mmHg</div></div>
+                      <div class="info-item"><div class="info-label">FC</div><div class="info-value">${escapeHtml(String(signosVitales.fc ?? '—'))} lpm</div></div>
+                      <div class="info-item"><div class="info-label">FR</div><div class="info-value">${escapeHtml(String(signosVitales.fr ?? '—'))} rpm</div></div>
+                      <div class="info-item"><div class="info-label">Temp.</div><div class="info-value">${escapeHtml(String(signosVitales.temp ?? '—'))} °C</div></div>
+                      <div class="info-item"><div class="info-label">SpO₂</div><div class="info-value">${escapeHtml(String(signosVitales.spo2 ?? '—'))} %</div></div>
+                      <div class="info-item"><div class="info-label">Peso</div><div class="info-value">${escapeHtml(String(signosVitales.peso ?? '—'))} kg</div></div>
+                      <div class="info-item"><div class="info-label">Talla</div><div class="info-value">${escapeHtml(String(signosVitales.talla ?? '—'))} cm</div></div>
+                      <div class="info-item"><div class="info-label">IMC</div><div class="info-value">${escapeHtml(String(signosVitales.imc ?? '—'))} kg/m²</div></div>
                     </div>
                   `
                 })
@@ -124,35 +125,34 @@ function wrapCard(el) {
   return card;
 }
 
-function medicoNombre(medicoId) {
-  const medico = getById('medicos', medicoId);
-  return medico ? medico.nombre : '';
-}
-
 function buildTabPanel(tabId, paciente, consultas, ultima, estudios) {
   if (!ultima && tabId !== 'alergias' && tabId !== 'estudios' && tabId !== 'vacunas') {
     return '<div class="empty-state">Aún no hay consultas registradas para este paciente.</div>';
   }
+  const antecedentes = ultima?.antecedentes || {};
+  const sintomas = ultima?.sintomas || [];
+  const diagnosticos = ultima?.diagnosticos || [];
+  const planTerapeutico = ultima?.planTerapeutico || [];
 
   switch (tabId) {
     case 'resumen':
       return `
         <div class="card-grid">
-          <div class="card"><h3 style="font-size:13px; margin-bottom:8px;">Antecedentes heredofamiliares</h3><p style="font-size:13px;">${escapeHtml(ultima.antecedentes.heredofamiliares || 'Sin información')}</p></div>
-          <div class="card"><h3 style="font-size:13px; margin-bottom:8px;">Antecedentes personales patológicos</h3><p style="font-size:13px;">${escapeHtml(ultima.antecedentes.personalesPatologicos || 'Sin información')}</p></div>
+          <div class="card"><h3 style="font-size:13px; margin-bottom:8px;">Antecedentes heredofamiliares</h3><p style="font-size:13px;">${escapeHtml(antecedentes.heredofamiliares || 'Sin información')}</p></div>
+          <div class="card"><h3 style="font-size:13px; margin-bottom:8px;">Antecedentes personales patológicos</h3><p style="font-size:13px;">${escapeHtml(antecedentes.personalesPatologicos || 'Sin información')}</p></div>
           <div class="card"><h3 style="font-size:13px; margin-bottom:8px;">Padecimiento actual</h3><p style="font-size:13px;">${escapeHtml(ultima.padecimientoActual)}</p></div>
           <div class="card">
             <h3 style="font-size:13px; margin-bottom:8px;">Síntomas</h3>
-            <div style="display:flex; gap:6px; flex-wrap:wrap;">${ultima.sintomas.map((s) => `<span class="badge badge-info">${escapeHtml(s)}</span>`).join('') || '<span class="text-tertiary">Sin síntomas registrados</span>'}</div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">${sintomas.map((s) => `<span class="badge badge-info">${escapeHtml(s)}</span>`).join('') || '<span class="text-tertiary">Sin síntomas registrados</span>'}</div>
           </div>
           <div class="card"><h3 style="font-size:13px; margin-bottom:8px;">Exploración física</h3><p style="font-size:13px;">${escapeHtml(ultima.exploracionFisica)}</p></div>
           <div class="card">
             <h3 style="font-size:13px; margin-bottom:8px;">Diagnóstico (CIE-10)</h3>
-            <div class="stack" style="gap:6px;">${ultima.diagnosticos.map((d) => `<div><span class="badge badge-primary">${escapeHtml(d.cie10)}</span> ${escapeHtml(d.descripcion)}</div>`).join('') || '<span class="text-tertiary">Sin diagnóstico registrado</span>'}</div>
+            <div class="stack" style="gap:6px;">${diagnosticos.map((d) => `<div><span class="badge badge-primary">${escapeHtml(d.cie10 || d.codigo || '')}</span> ${escapeHtml(d.descripcion || '')}</div>`).join('') || '<span class="text-tertiary">Sin diagnóstico registrado</span>'}</div>
           </div>
           <div class="card">
             <h3 style="font-size:13px; margin-bottom:8px;">Plan terapéutico</h3>
-            <ul style="padding-left:18px; font-size:13px; display:flex; flex-direction:column; gap:4px;">${ultima.planTerapeutico.map((p) => `<li>${escapeHtml(p)}</li>`).join('')}</ul>
+            <ul style="padding-left:18px; font-size:13px; display:flex; flex-direction:column; gap:4px;">${planTerapeutico.map((p) => `<li>${escapeHtml(p)}</li>`).join('') || '<li class="text-tertiary">Sin plan terapéutico registrado</li>'}</ul>
           </div>
           <div class="card"><h3 style="font-size:13px; margin-bottom:8px;">Notas</h3><p style="font-size:13px;">${escapeHtml(ultima.notas || 'Sin notas adicionales.')}</p></div>
         </div>
@@ -160,9 +160,9 @@ function buildTabPanel(tabId, paciente, consultas, ultima, estudios) {
     case 'antecedentes':
       return `
         <div class="stack">
-          <div class="info-item"><div class="info-label">Heredofamiliares</div><div class="info-value">${escapeHtml(ultima.antecedentes.heredofamiliares || 'Sin información')}</div></div>
-          <div class="info-item"><div class="info-label">Personales patológicos</div><div class="info-value">${escapeHtml(ultima.antecedentes.personalesPatologicos || 'Sin información')}</div></div>
-          <div class="info-item"><div class="info-label">Personales no patológicos</div><div class="info-value">${escapeHtml(ultima.antecedentes.personalesNoPatologicos || 'Sin información')}</div></div>
+          <div class="info-item"><div class="info-label">Heredofamiliares</div><div class="info-value">${escapeHtml(antecedentes.heredofamiliares || 'Sin información')}</div></div>
+          <div class="info-item"><div class="info-label">Personales patológicos</div><div class="info-value">${escapeHtml(antecedentes.personalesPatologicos || 'Sin información')}</div></div>
+          <div class="info-item"><div class="info-label">Personales no patológicos</div><div class="info-value">${escapeHtml(antecedentes.personalesNoPatologicos || 'Sin información')}</div></div>
         </div>
       `;
     case 'evolucion':
@@ -172,7 +172,7 @@ function buildTabPanel(tabId, paciente, consultas, ultima, estudios) {
               .map(
                 (c) => `
               <div class="timeline-item">
-                <div class="text-tertiary" style="font-size:11px;">${formatDate(c.fecha, { withTime: true })} · ${escapeHtml(medicoNombre(c.medicoId))}</div>
+                <div class="text-tertiary" style="font-size:11px;">${formatDate(c.fecha, { withTime: true })} · ${escapeHtml(c.medico?.nombre || '')}</div>
                 <div style="font-size:13px; font-weight:600;">${escapeHtml(c.motivoConsulta)}</div>
                 <p style="font-size:13px; margin-top:4px;">${escapeHtml(c.padecimientoActual)}</p>
               </div>`
@@ -186,11 +186,11 @@ function buildTabPanel(tabId, paciente, consultas, ultima, estudios) {
       return `
         <div class="stack">
           ${consultas
-            .flatMap((c) => c.diagnosticos.map((d) => ({ ...d, fecha: c.fecha })))
+            .flatMap((c) => (c.diagnosticos || []).map((d) => ({ ...d, fecha: c.fecha })))
             .map(
               (d) => `
             <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-color);">
-              <div><span class="badge badge-primary">${escapeHtml(d.cie10)}</span> ${escapeHtml(d.descripcion)}</div>
+              <div><span class="badge badge-primary">${escapeHtml(d.cie10 || d.codigo || '')}</span> ${escapeHtml(d.descripcion || '')}</div>
               <span class="text-tertiary" style="font-size:12px;">${formatDate(d.fecha)}</span>
             </div>`
             )
@@ -198,7 +198,7 @@ function buildTabPanel(tabId, paciente, consultas, ultima, estudios) {
         </div>
       `;
     case 'tratamiento':
-      return `<ul style="padding-left:18px; font-size:13px; display:flex; flex-direction:column; gap:6px;">${ultima.planTerapeutico.map((p) => `<li>${escapeHtml(p)}</li>`).join('') || '<li class="text-tertiary">Sin plan terapéutico registrado</li>'}</ul>`;
+      return `<ul style="padding-left:18px; font-size:13px; display:flex; flex-direction:column; gap:6px;">${planTerapeutico.map((p) => `<li>${escapeHtml(p)}</li>`).join('') || '<li class="text-tertiary">Sin plan terapéutico registrado</li>'}</ul>`;
     case 'alergias':
       return paciente.alergias.length
         ? `<div class="stack">

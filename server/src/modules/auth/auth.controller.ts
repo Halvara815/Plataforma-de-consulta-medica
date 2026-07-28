@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 import { AuthService, REFRESH_COOKIE_NAME } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDoctorDto } from './dto/register-doctor.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 @Controller('auth')
@@ -22,6 +23,12 @@ export class AuthController {
     const result = await this.authService.login(loginDto, this.correlationId(request));
     this.setRefreshCookie(response, result.refreshToken);
     return { accessToken: result.accessToken, user: result.user };
+  }
+
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  registerDoctor(@Body() dto: RegisterDoctorDto, @Req() request: Request) {
+    return this.authService.registerDoctor(dto, this.correlationId(request));
   }
 
   @Post('refresh')

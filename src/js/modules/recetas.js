@@ -7,6 +7,7 @@ import { escapeHtml, formatDate } from '../utils.js';
 import { icon } from '../icons.js';
 import { showToast } from '../components/toast.js';
 import { appState } from '../state.js';
+import { navigateTo } from '../router.js';
 
 let cleanupFns = [];
 let medicationRowCount = 0;
@@ -37,10 +38,29 @@ export async function mount(container, params = {}, query = {}) {
 
 async function renderTable(pacienteFiltro) {
   const cardEl = document.getElementById('recetas-table-card');
-  cardEl.innerHTML = '';
+  const pacientes = await getAll('pacientes', { limit: 100 });
+  const options = pacientes
+    .map((paciente) => `<option value="${paciente.id}" ${paciente.id === pacienteFiltro ? 'selected' : ''}>${escapeHtml(paciente.nombre)} ${escapeHtml(paciente.apellidos)}</option>`)
+    .join('');
+  cardEl.innerHTML = `
+    <div class="form-field" style="max-width:420px; margin-bottom:16px;">
+      <label for="recetas-paciente-filter">Paciente</label>
+      <select class="input" id="recetas-paciente-filter"><option value="">Selecciona un paciente para consultar sus recetas</option>${options}</select>
+    </div>
+    <div id="recetas-table-content"></div>`;
 
-  const [recetasData, pacientes] = await Promise.all([getAll('recetas'), getAll('pacientes')]);
-  let recetas = pacienteFiltro ? recetasData.filter((r) => r.pacienteId === pacienteFiltro) : recetasData;
+  const selector = cardEl.querySelector('#recetas-paciente-filter');
+  selector.addEventListener('change', () => {
+    navigateTo(selector.value ? `#/recetas?pacienteId=${encodeURIComponent(selector.value)}` : '#/recetas');
+  });
+
+  const tableContent = cardEl.querySelector('#recetas-table-content');
+  if (!pacienteFiltro) {
+    tableContent.innerHTML = '<div class="empty-state">Selecciona un paciente para consultar únicamente sus recetas autorizadas.</div>';
+    return;
+  }
+
+  let recetas = await getAll('recetas', { pacienteId: pacienteFiltro });
   recetas = [...recetas].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
   const rows = recetas.map((r) => {
@@ -73,7 +93,7 @@ async function renderTable(pacienteFiltro) {
     onRowClick: (row) => openDetalleReceta(row)
   });
 
-  cardEl.appendChild(table.el);
+  tableContent.appendChild(table.el);
 }
 
 async function openDetalleReceta(receta) {
@@ -142,7 +162,6 @@ async function openNuevaRecetaModal(pacienteFiltro) {
   const pacientes = await getAll('pacientes');
   const catalogos = await getCatalogos();
   const { currentUser } = appState.getState();
-  const medico = currentUser?.medicoId ? await getById('medicos', currentUser.medicoId) : null;
   medicationRowCount = 0;
 
   const bodyHtml = `
@@ -223,13 +242,11 @@ async function openNuevaRecetaModal(pacienteFiltro) {
             vigenciaDias: parseInt(data.vigenciaDias, 10) || 5,
             medicamentos,
             interacciones,
-            notasPaciente: data.notasPaciente || '',
-            firma: { medico: medico?.nombre || '', cedula: medico?.cedula || '' },
-            estado: 'activa'
+            notasPaciente: data.notasPaciente || ''
           });
 
           close();
-          await renderTable(pacienteFiltro);
+          navigateTo(`#/recetas?pacienteId=${encodeURIComponent(data.pacienteId)}`);
         } catch (error) {
           showToast({ message: userFacingApiError(error), tone: 'danger' });
         }

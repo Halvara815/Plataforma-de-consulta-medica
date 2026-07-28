@@ -3,7 +3,7 @@ import { escapeHtml, formatDate } from '../../utils.js';
 import { icon } from '../../icons.js';
 
 export async function render(paciente, panelEl) {
-  const recetas = (await queryCollection('recetas', (r) => r.pacienteId === paciente.id)).sort(
+  const recetas = (await queryCollection('recetas', null, { pacienteId: paciente.id })).sort(
     (a, b) => new Date(b.fecha) - new Date(a.fecha)
   );
 

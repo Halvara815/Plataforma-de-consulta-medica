@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -6,11 +6,14 @@ import { Repository } from 'typeorm';
 import { RedisService } from '../../common/redis/redis.service';
 import { AuditService } from './audit.service';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDoctorDto } from './dto/register-doctor.dto';
 import { RefreshToken } from './entities/refresh-token.entity';
+import { Rol } from './entities/rol.entity';
 import { Sesion } from './entities/sesion.entity';
 import { Usuario } from './entities/usuario.entity';
 import { LoginRateLimitService } from './login-rate-limit.service';
-import { generateRefreshToken, hashRefreshToken, verifyPassword } from './password-hash';
+import { generateRefreshToken, hashPassword, hashRefreshToken, verifyPassword } from './password-hash';
+import { Medico } from '../medicos/entities/medico.entity';
 
 export const REFRESH_COOKIE_NAME = 'consulta_refresh';
 
@@ -35,6 +38,10 @@ export class AuthService {
     private readonly sesionesRepository: Repository<Sesion>,
     @InjectRepository(RefreshToken)
     private readonly refreshTokensRepository: Repository<RefreshToken>,
+    @InjectRepository(Medico)
+    private readonly medicosRepository: Repository<Medico>,
+    @InjectRepository(Rol)
+    private readonly rolesRepository: Repository<Rol>,
     private readonly auditService: AuditService,
     private readonly loginRateLimitService: LoginRateLimitService,
     private readonly redisService: RedisService,
@@ -92,6 +99,71 @@ export class AuthService {
     });
 
     return { accessToken, refreshToken, user };
+  }
+
+  async registerDoctor(dto: RegisterDoctorDto, correlationId?: string): Promise<Record<string, unknown>> {
+    const email = dto.email.trim().toLowerCase();
+    const cedula = dto.cedula.trim();
+    const nombre = dto.nombre.trim();
+
+    const result = await this.usuariosRepository.manager.transaction(async (manager) => {
+      const usuarios = manager.getRepository(Usuario);
+      const medicos = manager.getRepository(Medico);
+      const roles = manager.getRepository(Rol);
+
+      if (await usuarios.exist({ where: { email } })) {
+        throw new ConflictException('Ya existe una cuenta registrada con ese correo');
+      }
+      if (await medicos.exist({ where: { cedula } })) {
+        throw new ConflictException('Ya existe un médico registrado con esa cédula');
+      }
+
+      const rolMedico = await roles.findOne({ where: { nombre: 'MEDICO' }, relations: ['permisos'] });
+      if (!rolMedico) {
+        throw new BadRequestException('El rol médico no está configurado. Solicita apoyo a la administración.');
+      }
+
+      const medico = await medicos.save(medicos.create({
+        nombre,
+        especialidad: dto.especialidad.trim(),
+        cedula,
+        consultorio: dto.consultorio?.trim() || null,
+        estado: 'pendiente',
+      }));
+      const usuario = await usuarios.save(usuarios.create({
+        email,
+        nombre,
+        passwordHash: await hashPassword(dto.password),
+        estado: 'pendiente',
+        medicoId: medico.id,
+        roles: [rolMedico],
+      }));
+
+      return { usuario, medico };
+    });
+
+    await this.auditService.record({
+      usuarioId: result.usuario.id,
+      accion: 'auth.doctor_registration',
+      recursoTipo: 'usuario',
+      recursoId: result.usuario.id,
+      resultado: 'exitoso',
+      correlationId,
+      metadata: { estado: 'pendiente' },
+    });
+
+    return {
+      id: result.usuario.id,
+      email: result.usuario.email,
+      nombre: result.usuario.nombre,
+      estado: result.usuario.estado,
+      medico: {
+        id: result.medico.id,
+        especialidad: result.medico.especialidad,
+        cedula: result.medico.cedula,
+        estado: result.medico.estado,
+      },
+    };
   }
 
   async refresh(refreshToken: string | undefined, correlationId?: string): Promise<{ accessToken: string; refreshToken: string; user: AuthenticatedUser }> {

@@ -39,7 +39,14 @@ describe('Recetas (e2e)', () => {
         fecha: '2026-08-01',
         tipo: 'ambulatoria',
         vigenciaDias: 5,
-        medicamentos: [{ nombre: 'Paracetamol', dosis: '1 tableta' }],
+        medicamentos: [{
+          nombre: 'Paracetamol',
+          concentracion: '500 mg',
+          dosis: '1 tableta',
+          frecuencia: 'Cada 8 h',
+          duracion: '3 días',
+          via: 'Oral',
+        }],
       });
   }
 
@@ -53,6 +60,8 @@ describe('Recetas (e2e)', () => {
     expect(primera.body.folio).toBeTruthy();
     expect(segunda.body.folio).toBeTruthy();
     expect(primera.body.folio).not.toBe(segunda.body.folio);
+    expect(primera.body.firma.medicoId).toBe(medico.id);
+    expect(primera.body.firma.cedula).toBe(medico.cedula);
   });
 
   it('rechaza una receta con paciente inactivo con 400', async () => {
@@ -90,5 +99,34 @@ describe('Recetas (e2e)', () => {
       .set('Authorization', `Bearer ${otro.token}`)
       .send({ notasPaciente: 'intento ajeno' })
       .expect(403);
+  });
+
+  it('valida la estructura de medicamentos y las transiciones de estado', async () => {
+    const { medico, token } = await medicoConToken();
+    const paciente = await createPaciente(dataSource);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/recetas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        pacienteId: paciente.id,
+        medicoId: medico.id,
+        fecha: '2026-08-01',
+        tipo: 'ambulatoria',
+        medicamentos: [{ nombre: 'Paracetamol', dosis: '1 tableta' }],
+      })
+      .expect(400);
+
+    const receta = await crearReceta(token, paciente.id, medico.id).expect(201);
+    await request(app.getHttpServer())
+      .patch(`/api/v1/recetas/${receta.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ estado: 'surtida' })
+      .expect(200);
+    await request(app.getHttpServer())
+      .patch(`/api/v1/recetas/${receta.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ notasPaciente: 'No debe editarse' })
+      .expect(400);
   });
 });

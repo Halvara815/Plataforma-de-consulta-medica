@@ -4,7 +4,8 @@ import { escapeHtml, formatDate, statusBadgeClass, statusLabel } from '../../uti
 export async function render(paciente, panelEl) {
   const estudios = (await queryCollection(
     'estudios',
-    (e) => e.pacienteId === paciente.id && e.tipoEstudio === 'laboratorio'
+    (e) => e.tipoEstudio === 'laboratorio',
+    { pacienteId: paciente.id }
   )).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
   panelEl.innerHTML = `

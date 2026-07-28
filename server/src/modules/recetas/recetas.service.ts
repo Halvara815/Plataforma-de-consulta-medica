@@ -1,11 +1,18 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
-import { Receta } from './entities/receta.entity';
-import { CreateRecetaDto } from './dto/create-receta.dto';
-import { UpdateRecetaDto } from './dto/update-receta.dto';
-import { AuthenticatedUser } from '../auth/auth.service';
 import { ClinicalReferencesService } from '../../common/validators/clinical-references.service';
+import { AuthenticatedUser } from '../auth/auth.service';
+import { CreateRecetaDto, RECETA_ESTADOS } from './dto/create-receta.dto';
+import { UpdateRecetaDto } from './dto/update-receta.dto';
+import { Receta } from './entities/receta.entity';
+
+const RECETA_TRANSICIONES: Record<string, string[]> = {
+  activa: ['surtida', 'cancelada', 'vencida'],
+  surtida: [],
+  cancelada: [],
+  vencida: [],
+};
 
 @Injectable()
 export class RecetasService {
@@ -22,19 +29,27 @@ export class RecetasService {
     }
 
     return this.dataSource.transaction(async (manager) => {
-      await this.clinicalReferences.assertReferencias(manager, {
-        pacienteId: createRecetaDto.pacienteId,
-        medicoId: createRecetaDto.medicoId,
-      });
+      const medico = await this.clinicalReferences.assertMedicoActivo(manager, createRecetaDto.medicoId);
+      await this.clinicalReferences.assertPacienteActivo(manager, createRecetaDto.pacienteId);
 
       const folio = await this.nextFolio(manager);
-      const receta = manager.create(Receta, { ...createRecetaDto, folio });
+      const receta = manager.create(Receta, {
+        ...createRecetaDto,
+        folio,
+        estado: 'activa',
+        firma: {
+          medicoId: medico.id,
+          nombre: medico.nombre,
+          cedula: medico.cedula,
+          emitidaEn: new Date().toISOString(),
+        },
+      });
       return manager.save(receta);
     });
   }
 
   async findAllByPaciente(pacienteId: string): Promise<Receta[]> {
-    return await this.recetasRepository.find({
+    return this.recetasRepository.find({
       where: { pacienteId },
       relations: ['medico'],
       order: { fecha: 'DESC' },
@@ -46,10 +61,7 @@ export class RecetasService {
       where: { id },
       relations: ['paciente', 'medico'],
     });
-
-    if (!receta) {
-      throw new NotFoundException(`Receta con ID ${id} no encontrada`);
-    }
+    if (!receta) throw new NotFoundException(`Receta con ID ${id} no encontrada`);
     return receta;
   }
 
@@ -60,12 +72,26 @@ export class RecetasService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!receta) throw new NotFoundException(`Receta con ID ${id} no encontrada`);
-
       if (receta.medicoId !== currentUser.medicoId) {
         throw new ForbiddenException('No puedes modificar la receta de otro médico.');
       }
       if (updateRecetaDto.medicoId && updateRecetaDto.medicoId !== currentUser.medicoId) {
         throw new ForbiddenException('No puedes transferir la receta a otro médico.');
+      }
+      if (updateRecetaDto.medicoId && updateRecetaDto.medicoId !== receta.medicoId) {
+        throw new BadRequestException('El médico prescriptor no puede cambiarse después de emitir la receta.');
+      }
+      if (updateRecetaDto.pacienteId && updateRecetaDto.pacienteId !== receta.pacienteId) {
+        throw new BadRequestException('El paciente de la receta no puede cambiarse después de emitirla.');
+      }
+      if (RECETA_ESTADOS.includes(receta.estado as (typeof RECETA_ESTADOS)[number]) && receta.estado !== 'activa') {
+        throw new BadRequestException('La receta ya está en un estado final y no admite modificaciones.');
+      }
+      if (updateRecetaDto.estado && updateRecetaDto.estado !== receta.estado) {
+        const allowed = RECETA_TRANSICIONES[receta.estado] ?? [];
+        if (!allowed.includes(updateRecetaDto.estado)) {
+          throw new BadRequestException(`No se permite cambiar una receta de ${receta.estado} a ${updateRecetaDto.estado}.`);
+        }
       }
 
       if (updateRecetaDto.pacienteId || updateRecetaDto.medicoId) {

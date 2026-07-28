@@ -2,7 +2,7 @@ import { query as queryCollection } from '../../services/dataService.js';
 import { escapeHtml, formatDate } from '../../utils.js';
 
 export async function render(paciente, panelEl) {
-  const consultas = (await queryCollection('consultas', (c) => c.pacienteId === paciente.id)).sort(
+  const consultas = (await queryCollection('consultas', null, { pacienteId: paciente.id })).sort(
     (a, b) => new Date(b.fecha) - new Date(a.fecha)
   );
 

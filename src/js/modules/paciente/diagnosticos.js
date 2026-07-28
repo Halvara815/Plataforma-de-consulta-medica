@@ -2,7 +2,7 @@ import { query as queryCollection } from '../../services/dataService.js';
 import { escapeHtml, formatDate } from '../../utils.js';
 
 export async function render(paciente, panelEl) {
-  const consultas = await queryCollection('consultas', (c) => c.pacienteId === paciente.id);
+  const consultas = await queryCollection('consultas', null, { pacienteId: paciente.id });
   const diagnosticos = consultas
     .flatMap((c) => c.diagnosticos.map((d) => ({ ...d, fecha: c.fecha })))
     .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));

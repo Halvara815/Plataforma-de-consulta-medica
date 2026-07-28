@@ -2,7 +2,7 @@ import { query as queryCollection } from '../../services/dataService.js';
 import { formatDate, lineChartSvg } from '../../utils.js';
 
 export async function render(paciente, panelEl) {
-  const consultas = (await queryCollection('consultas', (c) => c.pacienteId === paciente.id)).sort(
+  const consultas = (await queryCollection('consultas', null, { pacienteId: paciente.id })).sort(
     (a, b) => new Date(a.fecha) - new Date(b.fecha)
   );
   const ultima = consultas[consultas.length - 1];

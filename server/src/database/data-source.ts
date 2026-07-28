@@ -14,6 +14,7 @@ import { Rol } from '../modules/auth/entities/rol.entity';
 import { Sesion } from '../modules/auth/entities/sesion.entity';
 import { RefreshToken } from '../modules/auth/entities/refresh-token.entity';
 import { Usuario } from '../modules/auth/entities/usuario.entity';
+import { CatalogoClinico } from '../modules/catalogos/entities/catalogo-clinico.entity';
 
 config({ path: join(__dirname, '..', '..', '.env') });
 
@@ -32,7 +33,7 @@ export default new DataSource({
   username: required('DB_USERNAME'),
   password: required('DB_PASSWORD'),
   database: required('DB_NAME'),
-  entities: [Paciente, Medico, Cita, Consulta, Receta, Estudio, Documento, Usuario, Rol, Permiso, Sesion, RefreshToken, Auditoria],
+  entities: [Paciente, Medico, Cita, Consulta, Receta, Estudio, Documento, Usuario, Rol, Permiso, Sesion, RefreshToken, Auditoria, CatalogoClinico],
   migrations: [join(__dirname, 'migrations', '*{.ts,.js}')],
   migrationsTableName: 'typeorm_migrations',
   synchronize: false,

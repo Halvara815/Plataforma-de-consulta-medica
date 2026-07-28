@@ -240,14 +240,14 @@ async function renderTimeline(paciente) {
     return;
   }
 
-  const consultasFetch = await queryCollection('consultas', (c) => c.pacienteId === paciente.id);
+  const consultasFetch = await queryCollection('consultas', null, { pacienteId: paciente.id });
   const consultas = consultasFetch.map((c) => ({
     date: c.fecha,
     label: `Consulta: ${c.motivoConsulta}`,
     badge: 'Consulta',
     tone: 'badge-primary'
   }));
-  const recetasFetch = await queryCollection('recetas', (r) => r.pacienteId === paciente.id);
+  const recetasFetch = await queryCollection('recetas', null, { pacienteId: paciente.id });
   const recetas = recetasFetch.map((r) => ({
     date: r.fecha,
     label: `Receta ${r.folio}`,

@@ -34,12 +34,13 @@ Este README es la guía rectora de arquitectura, compatibilidad y fases de traba
 
 El prefijo global es `/api/v1`. Los recursos existentes conservan los nombres del dominio del frontend:
 
-- `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout` y `GET /auth/me`
+- `POST /auth/login`, `POST /auth/register` (solicitud de médico), `POST /auth/refresh`, `POST /auth/logout` y `GET /auth/me`
 - Administración protegida: `GET`/`POST`/`PATCH /usuarios`, `GET /usuarios/roles` y `GET /auditoria`
-- Lectura de `/medicos`
+- Lectura de `/medicos` y edición/activación de perfiles médicos mediante `PATCH /medicos/:id` para quien posee `usuarios:gestionar`
 - CRUD de `/pacientes`, `/citas`, `/consultas`, `/recetas` y `/estudios` con validación de referencias y autoría médica
+- Indicadores agregados protegidos: `GET /indicadores/dashboard` y `GET /indicadores/reportes`
 - CRUD parcial de `/documentos`
-- Lectura de `/catalogos`
+- Catálogos clínicos persistentes: `GET /catalogos`, `GET /catalogos/:tipo` y administración protegida en `/catalogos/entradas`
 
 La existencia de un endpoint no significa que esté listo para producción. La primera entrega de identidad ya incluye usuarios, roles, permisos, sesiones revocables, límites de login, expiración por inactividad, detección de reutilización de refresh token, administración básica y auditoría append-only. `pacientes`, `citas`, `consultas`, `recetas`, `estudios` y `medicos` ya cuentan con contrato OpenAPI (`GET /api/docs`) y pruebas de integración (`npm run test:e2e`); `documentos` todavía no tiene su propio corte funcional ni controles operativos de producción.
 
@@ -56,6 +57,7 @@ La existencia de un endpoint no significa que esté listo para producción. La p
 - Crear o modificar una consulta, receta o estudio exige que `medicoId` coincida con el médico de la sesión autenticada; si no coincide, devuelve `403`.
 - `PATCH /consultas/:id` con `{ "estado": "completada" }` cierra la consulta en una transacción con bloqueo; cualquier `PATCH` posterior sobre una consulta `completada` devuelve `400`.
 - `POST /recetas` ignora cualquier `folio` que envíe el cliente; el servidor lo asigna a partir de la secuencia `recetas_folio_seq`.
+- Las vistas globales consumen indicadores agregados en vez de descargar consultas, recetas o estudios completos. Los dos endpoints de indicadores requieren los permisos de lectura de pacientes, citas y recursos clínicos.
 
 ## Bloqueantes actuales de producción
 
@@ -121,6 +123,8 @@ Las fases se entregan en cortes verticales: contrato OpenAPI → migración → 
 - La bitácora registra autenticación y lecturas/escrituras protegidas; PostgreSQL impide `UPDATE` y `DELETE` sobre `auditoria` mediante trigger.
 - Redis limita los intentos fallidos por identidad seudonimizada mediante HMAC y replica la revocación de sesión. Si está apagado en desarrollo, existe una reserva local; en un entorno compartido debe configurarse `REDIS_ENABLED=true` y `REDIS_REQUIRED=true`.
 - El rol con `usuarios:gestionar` puede abrir `#/administracion`, crear usuarios, asignar los roles existentes, activar/desactivar cuentas y reiniciar contraseñas. El backend conserva al menos un administrador activo y revoca sesiones al desactivar o restablecer una contraseña.
+- El registro público solo acepta solicitudes de médicos: crea el perfil y la cuenta con rol `MEDICO` en estado `pendiente`. Un gestor debe revisar y activar el perfil en `#/administracion`; esa acción activa la cuenta asociada y, al desactivarla, revoca sus sesiones.
+- Solo puede existir una cuenta con rol `ADMIN`. La API impide asignar un segundo administrador y PostgreSQL aplica la misma regla mediante un trigger sobre `usuario_roles`. El formulario de administración no ofrece crear ni asignar administradores.
 - Los rechazos de permisos quedan auditados como `authorization.denied`, sin registrar cuerpos ni datos clínicos. Cada refresh se consume una sola vez: su reutilización revoca la sesión, registra `auth.refresh_reuse` y propaga la revocación a Redis.
 - La sesión conserva un vencimiento absoluto y uno configurable por inactividad (`SESSION_IDLE_TTL_MINUTES`, 60 minutos en desarrollo). Al vencer, se revoca en PostgreSQL y Redis y registra `auth.session_idle_timeout`.
 - Pendiente en esta fase: políticas operativas de retención y revisión de auditoría.
@@ -134,13 +138,13 @@ Las fases se entregan en cortes verticales: contrato OpenAPI → migración → 
 - Implementado: la creación y edición de citas se ejecutan en una transacción, toman bloqueos transaccionales de PostgreSQL por médico/fecha y consultorio/fecha, rechazan solapes con `409` y validan las transiciones `pendiente → confirmada → en_consulta → completada` o cancelación desde los estados no finales.
 - Implementado: contrato OpenAPI de `/pacientes` y `/citas` servido en `GET /api/docs` (deshabilitado cuando `NODE_ENV=production`).
 - Implementado: pruebas automatizadas de integración (`npm run test:e2e` en `server/`) contra una base PostgreSQL de pruebas real y aislada, cubriendo paginación, búsqueda, filtros, solapes (`409`), transiciones de estado (`400`) y autorización (`401`/`403`) de `pacientes` y `citas`.
-- Pendiente: extender el contrato OpenAPI y las pruebas automatizadas a `consultas`, `recetas`, `estudios` y `documentos` cuando esos módulos reciban su propio corte funcional (Fase 4).
+- Pendiente: extender el contrato OpenAPI y las pruebas automatizadas a `documentos` cuando reciba su propio corte funcional.
 
 **Salida verificada:** buscar paciente, filtrar la agenda y rechazar un solape o transición inválida funciona contra la base local autenticada, y queda cubierto por pruebas automatizadas repetibles. Falta la navegación visual de extremo a extremo (Playwright u otra herramienta de UI), que se abordará junto con el resto de los módulos clínicos.
 
 ### Fase 4 — Núcleo clínico
 
-- Implementado: nuevo `GET /medicos` y `GET /medicos/:id` (solo lectura, protegidos con sesión pero sin permiso fino, igual que `/catalogos`). No existía ningún endpoint de médicos; el frontend ya lo necesitaba (selector de médico en Agenda, nombre/cédula en Consulta, Recetas e Historia Clínica) y devolvía `404`.
+- Implementado: nuevo `GET /medicos` y `GET /medicos/:id` (solo lectura, protegidos con sesión). No existía ningún endpoint de médicos; el frontend ya lo necesitaba (selector de médico en Agenda, nombre/cédula en Consulta, Recetas e Historia Clínica) y devolvía `404`.
 - Implementado: `consultas`, `recetas` y `estudios` validan que el paciente y el médico referenciados existan y estén `activo` (mismo patrón que `citas`), y exigen `pacienteId`/`medicoId` como UUID.
 - Implementado: `GET /consultas`, `GET /recetas` y `GET /estudios` ahora exigen `pacienteId` como UUID; antes, omitirlo devolvía los registros clínicos de todos los pacientes en vez de rechazar la petición.
 - Implementado: la escritura de consultas, recetas y estudios queda restringida al médico autor (`medicoId` debe coincidir con el médico de la sesión autenticada, sin excepción para ADMIN); solo se puede crear o modificar el propio registro.
@@ -148,9 +152,13 @@ Las fases se entregan en cortes verticales: contrato OpenAPI → migración → 
 - Implementado: el folio de las recetas (columna única) ya no lo genera el cliente — lo asigna el servidor con una secuencia de PostgreSQL (`recetas_folio_seq`) dentro de la misma transacción, eliminando la condición de carrera del cálculo anterior en el frontend.
 - Implementado: contrato OpenAPI y pruebas de integración (`npm run test:e2e`) para `medicos`, `consultas`, `recetas` y `estudios`, cubriendo referencias inválidas (`400`), autoría (`403`) y el cierre transaccional de consultas.
 - Corregido en el frontend: `consulta.js` y `recetas.js` usaban un médico fijo de una maqueta previa a la migración (`MED-0001`) en vez del médico de la sesión real; `recetas.js` además tenía varias llamadas a la API sin `await` que rompían la tabla y el detalle de receta, y calculaba el folio en el cliente contando registros (rompía con el primer borrado o con dos usuarios guardando a la vez).
-- Pendiente: signos vitales, diagnósticos y tratamientos ya se capturan como parte de la consulta (JSON), pero no tienen su propio contrato ni validación estructurada; catálogos sigue siendo una respuesta en memoria (decisión ya documentada en el propio servicio), sin persistencia ni administración.
+- Corregido: las pantallas de expediente consultan consultas, recetas y estudios con `pacienteId`; Dashboard y Reportes usan `/indicadores/*`, por lo que no vuelven a descargar registros clínicos completos para calcular gráficas.
+- Implementado: los signos vitales, antecedentes, diagnósticos CIE-10 y planes terapéuticos ahora tienen límites, tipos y validación anidada. El servidor calcula el IMC desde peso y talla y rechaza códigos CIE-10 inexistentes o inactivos.
+- Implementado: las recetas validan medicamentos estructurados, vigencia y vías de administración. La firma se compone exclusivamente en el servidor con los datos del médico autenticado; el cliente no puede suplantarla. Las recetas y los estudios aplican transiciones de estado y no permiten cambiar paciente o médico después de su emisión.
+- Implementado: `catalogos_clinicos` es una tabla versionada mediante migración, precargada con los diccionarios que usaba la interfaz. `catalogos:leer` permite consumir solo entradas activas; `catalogos:gestionar` permite crear, editar, activar o desactivar entradas desde `#/administracion`. La migración también normaliza los registros de demostración heredados al contrato clínico actual.
+- Verificado: la suite de integración cubre catálogos, estructura clínica, firma de receta, transiciones y el registro/activación de médicos; suma 40 pruebas contra PostgreSQL aislado.
 
-**Salida verificada:** crear y cerrar una consulta, prescribir una receta con folio único y solicitar un estudio funciona de extremo a extremo contra la base local autenticada, con las reglas de autoría y transición cubiertas por pruebas automatizadas. Falta la navegación visual de extremo a extremo (Playwright u otra herramienta de UI).
+**Salida verificada:** crear y cerrar una consulta, prescribir una receta con folio y firma de servidor, solicitar y completar un estudio, y administrar catálogos funciona de extremo a extremo contra la base local autenticada. Las reglas de autoría, validación y transición están cubiertas por pruebas automatizadas. La automatización visual de navegador (Playwright u otra herramienta de UI) queda como mejora de una fase posterior.
 
 ### Fase 5 — Documentos e imágenes
 

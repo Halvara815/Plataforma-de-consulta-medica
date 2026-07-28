@@ -23,6 +23,9 @@ export async function createTestApp(): Promise<INestApplication> {
 
 export async function resetDatabase(app: INestApplication): Promise<void> {
   const dataSource = app.get(DataSource);
-  const tables = dataSource.entityMetadatas.map((metadata) => `"${metadata.tableName}"`).join(', ');
+  const tables = dataSource.entityMetadatas
+    .filter((metadata) => metadata.tableName !== 'catalogos_clinicos')
+    .map((metadata) => `"${metadata.tableName}"`)
+    .join(', ');
   await dataSource.query(`TRUNCATE TABLE ${tables} RESTART IDENTITY CASCADE`);
 }
