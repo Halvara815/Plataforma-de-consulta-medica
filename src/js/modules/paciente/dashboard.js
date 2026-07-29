@@ -8,7 +8,7 @@ export async function render(paciente, panelEl) {
     (a, b) => new Date(b.fecha) - new Date(a.fecha)
   );
   const recetas = await queryCollection('recetas', null, { pacienteId: paciente.id });
-  const documentos = await queryCollection('documentos', (d) => d.pacienteId === paciente.id);
+  const documentos = await queryCollection('documentos', null, { pacienteId: paciente.id });
   const citas = (await queryCollection('citas', (c) => c.pacienteId === paciente.id)).sort(
     (a, b) => new Date(`${a.fecha}T${a.horaInicio || '00:00'}`) - new Date(`${b.fecha}T${b.horaInicio || '00:00'}`)
   );

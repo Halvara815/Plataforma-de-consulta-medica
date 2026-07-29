@@ -51,11 +51,12 @@ export function userFacingApiError(error) {
   }
 }
 
-async function request(endpoint, options = {}, { retryOnUnauthorized = true } = {}) {
+async function request(endpoint, options = {}, { retryOnUnauthorized = true, responseType = 'json' } = {}) {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers || {}),
   };
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
@@ -72,7 +73,7 @@ async function request(endpoint, options = {}, { retryOnUnauthorized = true } = 
       if (response.status === 401 && retryOnUnauthorized && !endpoint.startsWith('auth/')) {
         try {
           await restoreSession();
-          return request(endpoint, options, { retryOnUnauthorized: false });
+          return request(endpoint, options, { retryOnUnauthorized: false, responseType });
         } catch {
           clearAuthSession();
         }
@@ -95,6 +96,12 @@ async function request(endpoint, options = {}, { retryOnUnauthorized = true } = 
     }
 
     if (response.status === 204) return true;
+    if (responseType === 'blob') {
+      return {
+        blob: await response.blob(),
+        filename: response.headers.get('content-disposition') || null,
+      };
+    }
     return response.json();
   } catch (error) {
     if (error instanceof ApiError) throw error;
@@ -218,11 +225,63 @@ export async function getReportMetrics() {
   return request('indicadores/reportes');
 }
 
+export async function getPreferences() {
+  return request('preferencias');
+}
+
+export async function updatePreferences(patch) {
+  return request('preferencias', {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function resetHerramientasPreferences() {
+  return request('preferencias/herramientas', { method: 'DELETE' });
+}
+
+export async function getSignatures() {
+  return request('preferencias/firmas');
+}
+
+export async function uploadSignature(file) {
+  const formData = new FormData();
+  formData.append('file', file, file.name);
+  return request('preferencias/firmas', { method: 'POST', body: formData });
+}
+
+export async function downloadSignature(id) {
+  return request(`preferencias/firmas/${id}/download`, {}, { responseType: 'blob' });
+}
+
+export async function removeSignature(id) {
+  return request(`preferencias/firmas/${id}`, { method: 'DELETE' });
+}
+
 export async function create(collection, data) {
   return request(collection, {
     method: 'POST',
     body: JSON.stringify(data),
   });
+}
+
+export async function uploadDocument(data, file) {
+  const formData = new FormData();
+  Object.entries(data).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      formData.append(key, Array.isArray(value) ? value.join(',') : String(value));
+    }
+  });
+  formData.append('file', file, file.name);
+  return request('documentos', { method: 'POST', body: formData });
+}
+
+export async function downloadDocument(id) {
+  return request(`documentos/${id}/download`, {}, { responseType: 'blob' });
+}
+
+export async function restoreDocument(id) {
+  return request(`documentos/${id}/restaurar`, { method: 'PATCH', body: JSON.stringify({}) });
 }
 
 export async function update(collection, id, patch) {

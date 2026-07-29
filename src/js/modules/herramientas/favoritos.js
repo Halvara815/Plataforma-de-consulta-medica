@@ -1,8 +1,7 @@
-import { getLocal, setLocal } from '../../utils.js';
+import { showToast } from '../../components/toast.js';
 import { icon } from '../../icons.js';
 import { escapeHtml } from '../../utils.js';
-
-const STORAGE_KEY = 'herramientas_favoritos';
+import { loadPreferences, updatePreferences } from '../../services/preferencesService.js';
 
 const SHORTCUTS = [
   { id: 'nuevo-paciente', label: 'Nuevo paciente', icon: 'patients', path: '#/pacientes?action=nuevo' },
@@ -12,10 +11,13 @@ const SHORTCUTS = [
   { id: 'reportes', label: 'Reportes', icon: 'reports', path: '#/reportes' },
   { id: 'documentos', label: 'Gestor de archivos', icon: 'documents', path: '#/documentos' },
   { id: 'calc-imc', label: 'Calculadora IMC', icon: 'activity', path: '#/calculadora' },
-  { id: 'config', label: 'Configuración', icon: 'settings', path: '#/configuracion' }
+  { id: 'config', label: 'Configuración', icon: 'settings', path: '#/configuracion' },
 ];
 
-export function render(panelEl) {
+export async function render(panelEl) {
+  const preferences = await loadPreferences();
+  let favoritos = new Set(preferences.favoritos);
+
   panelEl.innerHTML = `
     <div class="card">
       <div class="card-header"><h2>Accesos favoritos</h2></div>
@@ -26,35 +28,42 @@ export function render(panelEl) {
 
   const gridEl = panelEl.querySelector('#fav-grid');
 
-  function getFavoritos() {
-    return new Set(getLocal(STORAGE_KEY, ['nuevo-paciente', 'agenda', 'reportes']));
+  async function save(next) {
+    const previous = favoritos;
+    favoritos = next;
+    draw();
+    try {
+      favoritos = new Set((await updatePreferences({ favoritos: [...favoritos] })).favoritos);
+      draw();
+    } catch {
+      favoritos = previous;
+      draw();
+      showToast({ message: 'No se pudieron sincronizar los favoritos.', tone: 'warning' });
+    }
   }
 
   function draw() {
-    const favoritos = getFavoritos();
-    gridEl.innerHTML = SHORTCUTS.map((s) => {
-      const isFav = favoritos.has(s.id);
+    gridEl.innerHTML = SHORTCUTS.map((shortcut) => {
+      const isFav = favoritos.has(shortcut.id);
       return `
         <div class="tool-card" style="flex-direction:column; align-items:stretch; gap:10px;">
           <div style="display:flex; align-items:center; justify-content:space-between;">
-            ${icon(s.icon, { size: 22 })}
-            <button type="button" class="btn btn-ghost btn-sm" data-toggle="${s.id}" aria-label="Marcar como favorito">
+            ${icon(shortcut.icon, { size: 22 })}
+            <button type="button" class="btn btn-ghost btn-sm" data-toggle="${shortcut.id}" aria-label="Marcar como favorito">
               ${icon(isFav ? 'star-filled' : 'star', { size: 16 })}
             </button>
           </div>
-          <strong style="font-size:13px;">${escapeHtml(s.label)}</strong>
-          <a class="btn btn-secondary btn-sm" href="${s.path}">Ir</a>
+          <strong style="font-size:13px;">${escapeHtml(shortcut.label)}</strong>
+          <a class="btn btn-secondary btn-sm" href="${shortcut.path}">Ir</a>
         </div>
       `;
     }).join('');
 
-    gridEl.querySelectorAll('[data-toggle]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const favs = getFavoritos();
-        const id = btn.dataset.toggle;
-        favs.has(id) ? favs.delete(id) : favs.add(id);
-        setLocal(STORAGE_KEY, [...favs]);
-        draw();
+    gridEl.querySelectorAll('[data-toggle]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const next = new Set(favoritos);
+        next.has(button.dataset.toggle) ? next.delete(button.dataset.toggle) : next.add(button.dataset.toggle);
+        void save(next);
       });
     });
   }

@@ -713,8 +713,11 @@ table.data-table tbody tr.is-clickable {
 }
 
 .input,
+.form-input,
 select.input,
-textarea.input {
+select.form-input,
+textarea.input,
+textarea.form-input {
   border: 1px solid var(--border-color-strong);
   background: var(--bg-surface);
   border-radius: var(--radius-md);
@@ -727,16 +730,22 @@ textarea.input {
 }
 
 .input:focus,
+.form-input:focus,
 select.input:focus,
-textarea.input:focus {
+select.form-input:focus,
+textarea.input:focus,
+textarea.form-input:focus {
   border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 14%, transparent);
 }
 
-.input.has-error {
+.input.has-error,
+.form-input.has-error {
   border-color: var(--color-danger);
 }
 
-textarea.input {
+textarea.input,
+textarea.form-input {
   resize: vertical;
   min-height: 80px;
 }

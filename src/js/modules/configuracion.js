@@ -43,7 +43,7 @@ export async function mount(container) {
                   )
                   .join('')}
               </div>
-              <p class="text-tertiary" style="font-size:12px; margin-top:10px;">Esta preferencia se guarda en el dispositivo local (solo afecta la interfaz).</p>
+              <p class="text-tertiary" style="font-size:12px; margin-top:10px;">Esta preferencia se sincroniza de forma privada con tu cuenta.</p>
             `
           })}
 
@@ -89,8 +89,14 @@ export async function mount(container) {
     </div>
   `;
 
-  document.getElementById('theme-options').addEventListener('change', (e) => {
-    if (e.target.name === 'theme') setTheme(e.target.value);
+  document.getElementById('theme-options').addEventListener('change', async (e) => {
+    if (e.target.name !== 'theme') return;
+    try {
+      await setTheme(e.target.value);
+      setStatus('Tema sincronizado con tu cuenta.');
+    } catch {
+      setStatus('No se pudo sincronizar el tema. Intenta de nuevo.');
+    }
   });
 
   document.getElementById('btn-reset').addEventListener('click', async () => {

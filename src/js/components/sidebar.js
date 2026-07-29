@@ -33,7 +33,7 @@ export function mountSidebar(container) {
       .filter((item) => !item.permission || currentUser?.permisos?.includes(item.permission))
       .map((item) =>
       item.route === 'historiaClinica'
-        ? { ...item, path: contextPatientId ? `#/historia-clinica/${contextPatientId}` : '#/pacientes' }
+        ? { ...item, path: contextPatientId ? `#/historia-clinica/${contextPatientId}` : '#/historia-clinica' }
         : item
       );
 

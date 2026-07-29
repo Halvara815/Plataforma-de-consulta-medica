@@ -1,4 +1,4 @@
-import { update } from '../../services/dataService.js';
+import { update, userFacingApiError } from '../../services/dataService.js';
 import { textField, selectField, getFormData, validateRequired } from '../../components/form.js';
 import { showToast } from '../../components/toast.js';
 import { icon } from '../../icons.js';
@@ -25,13 +25,21 @@ export async function render(paciente, panelEl, ctx = {}) {
     const form = panelEl.querySelector('#form-config-paciente');
     if (!validateRequired(form)) return;
     const data = getFormData(form);
-    await update('pacientes', paciente.id, {
-      nombre: data.nombre,
-      apellidos: data.apellidos,
-      estado: data.estado,
-      contacto: { ...paciente.contacto, email: data.email, telefono: data.telefono, direccion: data.direccion }
-    });
-    showToast({ message: 'Datos del paciente actualizados.', tone: 'success' });
-    if (typeof ctx.refresh === 'function') ctx.refresh();
+    const submit = panelEl.querySelector('#btn-guardar-config');
+    submit.disabled = true;
+    try {
+      await update('pacientes', paciente.id, {
+        nombre: data.nombre,
+        apellidos: data.apellidos,
+        estado: data.estado,
+        contacto: { ...paciente.contacto, email: data.email, telefono: data.telefono, direccion: data.direccion }
+      });
+      showToast({ message: 'Datos del paciente actualizados.', tone: 'success' });
+      if (typeof ctx.refresh === 'function') await ctx.refresh();
+    } catch (error) {
+      showToast({ message: userFacingApiError(error), tone: 'danger' });
+    } finally {
+      submit.disabled = false;
+    }
   });
 }

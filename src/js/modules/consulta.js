@@ -133,8 +133,8 @@ export async function mount(container, params = {}) {
       return { cie10, descripcion, tipo: 'definitivo' };
     });
 
-    const peso = parseFloat(data.peso) || null;
-    const talla = parseFloat(data.talla) || null;
+    const signosVitales = buildVitalSigns(data);
+    const antecedentes = buildAntecedentes(data);
 
     if (!currentUser?.medicoId) {
       showToast({ message: 'Tu cuenta no tiene un médico vinculado; no puedes registrar consultas.', tone: 'danger' });
@@ -150,22 +150,9 @@ export async function mount(container, params = {}) {
         motivoConsulta: data.motivoConsulta,
         padecimientoActual: data.padecimientoActual || '',
         sintomas: data.sintomas ? data.sintomas.split(',').map((s) => s.trim()).filter(Boolean) : [],
-        signosVitales: {
-          ta: data.ta || '',
-          fc: parseInt(data.fc, 10) || null,
-          fr: parseInt(data.fr, 10) || null,
-          temp: parseFloat(data.temp) || null,
-          spo2: parseInt(data.spo2, 10) || null,
-          peso,
-          talla,
-          imc: calcIMC(peso, talla)
-        },
+        ...(Object.keys(signosVitales).length ? { signosVitales } : {}),
         exploracionFisica: data.exploracionFisica || '',
-        antecedentes: {
-          heredofamiliares: data.heredofamiliares || '',
-          personalesPatologicos: data.personalesPatologicos || '',
-          personalesNoPatologicos: data.personalesNoPatologicos || ''
-        },
+        ...(Object.keys(antecedentes).length ? { antecedentes } : {}),
         diagnosticos,
         planTerapeutico: data.planTerapeutico ? data.planTerapeutico.split('\n').map((s) => s.trim()).filter(Boolean) : [],
         notas: data.notas || '',
@@ -178,6 +165,34 @@ export async function mount(container, params = {}) {
       showToast({ message: userFacingApiError(error), tone: 'danger' });
     }
   });
+}
+
+function optionalNumber(value) {
+  if (value === '' || value === null || value === undefined) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function buildVitalSigns(data) {
+  const signs = {
+    ta: String(data.ta || '').trim() || undefined,
+    fc: optionalNumber(data.fc),
+    fr: optionalNumber(data.fr),
+    temp: optionalNumber(data.temp),
+    spo2: optionalNumber(data.spo2),
+    peso: optionalNumber(data.peso),
+    talla: optionalNumber(data.talla),
+  };
+  return Object.fromEntries(Object.entries(signs).filter(([, value]) => value !== undefined));
+}
+
+function buildAntecedentes(data) {
+  const antecedentes = {
+    heredofamiliares: String(data.heredofamiliares || '').trim() || undefined,
+    personalesPatologicos: String(data.personalesPatologicos || '').trim() || undefined,
+    personalesNoPatologicos: String(data.personalesNoPatologicos || '').trim() || undefined,
+  };
+  return Object.fromEntries(Object.entries(antecedentes).filter(([, value]) => value !== undefined));
 }
 
 function wireImcCalculation() {

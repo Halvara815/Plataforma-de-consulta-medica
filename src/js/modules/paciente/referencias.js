@@ -1,4 +1,4 @@
-import { update } from '../../services/dataService.js';
+import { create, getAll, userFacingApiError } from '../../services/dataService.js';
 import { openModal } from '../../components/modal.js';
 import { textField, selectField, textareaField, getFormData, validateRequired } from '../../components/form.js';
 import { escapeHtml, formatDate } from '../../utils.js';
@@ -6,7 +6,13 @@ import { icon } from '../../icons.js';
 import { showToast } from '../../components/toast.js';
 
 export async function render(paciente, panelEl, ctx = {}) {
-  const referencias = [...(paciente.referencias || [])].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+  let referencias = [];
+  try {
+    referencias = await getAll('referencias', { pacienteId: paciente.id });
+  } catch (error) {
+    panelEl.innerHTML = `<div class="empty-state" role="alert">${escapeHtml(userFacingApiError(error))}</div>`;
+    return;
+  }
 
   panelEl.innerHTML = `
     <div class="card">
@@ -63,11 +69,19 @@ function openNuevaReferenciaModal(paciente, ctx) {
         const form = modalEl.querySelector('#form-nueva-referencia');
         if (!validateRequired(form)) return;
         const data = getFormData(form);
-        const referencias = [...(paciente.referencias || []), { ...data }];
-        await update('pacientes', paciente.id, { referencias });
-        close();
-        showToast({ message: 'Referencia guardada.', tone: 'success' });
-        if (typeof ctx.refresh === 'function') ctx.refresh();
+        const submit = modalEl.querySelector('#modal-save');
+        submit.disabled = true;
+        submit.textContent = 'Guardando…';
+        try {
+          await create('referencias', { pacienteId: paciente.id, ...data });
+          close();
+          showToast({ message: 'Referencia guardada.', tone: 'success' });
+          if (typeof ctx.refresh === 'function') await ctx.refresh();
+        } catch (error) {
+          showToast({ message: userFacingApiError(error), tone: 'danger' });
+          submit.disabled = false;
+          submit.textContent = 'Guardar referencia';
+        }
       });
     }
   });

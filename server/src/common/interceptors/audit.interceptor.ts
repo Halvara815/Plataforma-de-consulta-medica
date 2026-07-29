@@ -1,6 +1,6 @@
 import { CallHandler, ExecutionContext, Injectable, Logger, NestInterceptor } from '@nestjs/common';
 import { Observable } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import { mergeMap } from 'rxjs/operators';
 import { AuditService } from '../../modules/auth/audit.service';
 
 @Injectable()
@@ -11,6 +11,7 @@ export class AuditInterceptor implements NestInterceptor {
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest();
+    const response = context.switchToHttp().getResponse();
     const usuario = request.user as { id?: string } | undefined;
     const recursoTipo = this.resourceType(request.baseUrl);
 
@@ -19,8 +20,12 @@ export class AuditInterceptor implements NestInterceptor {
     }
 
     return next.handle().pipe(
-      tap(() => {
-        void this.auditService.record({
+      mergeMap(async (value) => {
+        // Los controladores que envían una respuesta binaria con @Res auditan
+        // explícitamente antes de transmitir el contenido.
+        if (response.headersSent) return value;
+        try {
+          await this.auditService.record({
           usuarioId: usuario.id,
           accion: `api.${request.method.toLowerCase()}`,
           recursoTipo,
@@ -28,12 +33,14 @@ export class AuditInterceptor implements NestInterceptor {
           resultado: 'exitoso',
           correlationId: this.correlationId(request.headers['x-request-id']),
           metadata: { metodo: request.method },
-        }).catch((error: unknown) => {
+          });
+        } catch (error) {
           this.logger.error(JSON.stringify({
             event: 'audit.write_failed',
             errorType: error instanceof Error ? error.name : 'UnknownError',
           }));
-        });
+        }
+        return value;
       }),
     );
   }

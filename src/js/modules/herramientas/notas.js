@@ -1,10 +1,16 @@
-import { getLocal, setLocal } from '../../utils.js';
-import { escapeHtml, formatDate } from '../../utils.js';
+import { showToast } from '../../components/toast.js';
 import { icon } from '../../icons.js';
+import { escapeHtml, formatDate } from '../../utils.js';
+import { loadPreferences, updatePreferences } from '../../services/preferencesService.js';
 
-const STORAGE_KEY = 'herramientas_notas';
+function newId(prefix) {
+  return globalThis.crypto?.randomUUID?.() || `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
-export function render(panelEl) {
+export async function render(panelEl) {
+  const preferences = await loadPreferences();
+  let notas = [...preferences.notas];
+
   panelEl.innerHTML = `
     <div class="card">
       <div class="card-header"><h2>Nueva nota</h2></div>
@@ -30,41 +36,55 @@ export function render(panelEl) {
   const cuerpoInput = panelEl.querySelector('#nota-cuerpo');
   const listEl = panelEl.querySelector('#notas-list');
 
+  async function save(next) {
+    const previous = notas;
+    notas = next;
+    draw();
+    try {
+      notas = (await updatePreferences({ notas })).notas;
+      draw();
+      return true;
+    } catch {
+      notas = previous;
+      draw();
+      showToast({ message: 'No se pudo sincronizar la nota.', tone: 'warning' });
+      return false;
+    }
+  }
+
   function draw() {
-    const notas = getLocal(STORAGE_KEY, []);
     listEl.innerHTML = notas.length
       ? notas
           .map(
-            (n) => `
+            (nota) => `
         <div class="tool-card">
           <div style="min-width:0;">
-            <strong style="font-size:13px;">${escapeHtml(n.titulo)}</strong>
-            <div class="text-tertiary" style="font-size:11px; margin:2px 0 6px;">${formatDate(n.fecha, { withTime: true })}</div>
-            <p style="font-size:13px; white-space:pre-wrap;">${escapeHtml(n.cuerpo)}</p>
+            <strong style="font-size:13px;">${escapeHtml(nota.titulo)}</strong>
+            <div class="text-tertiary" style="font-size:11px; margin:2px 0 6px;">${formatDate(nota.fecha, { withTime: true })}</div>
+            <p style="font-size:13px; white-space:pre-wrap;">${escapeHtml(nota.cuerpo)}</p>
           </div>
-          <button type="button" class="btn btn-ghost btn-sm" data-remove="${n.id}">${icon('trash', { size: 14 })}</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-remove="${nota.id}">${icon('trash', { size: 14 })}</button>
         </div>`
           )
           .join('')
       : '<div class="empty-state">Sin notas guardadas.</div>';
 
-    listEl.querySelectorAll('[data-remove]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const id = Number(btn.dataset.remove);
-        setLocal(STORAGE_KEY, getLocal(STORAGE_KEY, []).filter((n) => n.id !== id));
-        draw();
-      });
+    listEl.querySelectorAll('[data-remove]').forEach((button) => {
+      button.addEventListener('click', () => void save(notas.filter((nota) => nota.id !== button.dataset.remove)));
     });
   }
 
-  panelEl.querySelector('#nota-guardar').addEventListener('click', () => {
-    if (!tituloInput.value.trim()) return;
-    const notas = getLocal(STORAGE_KEY, []);
-    notas.unshift({ id: Date.now(), titulo: tituloInput.value.trim(), cuerpo: cuerpoInput.value.trim(), fecha: new Date().toISOString() });
-    setLocal(STORAGE_KEY, notas);
-    tituloInput.value = '';
-    cuerpoInput.value = '';
-    draw();
+  panelEl.querySelector('#nota-guardar').addEventListener('click', async () => {
+    const titulo = tituloInput.value.trim();
+    if (!titulo) return;
+    const saved = await save([
+      { id: newId('nota'), titulo, cuerpo: cuerpoInput.value.trim(), fecha: new Date().toISOString() },
+      ...notas,
+    ]);
+    if (saved) {
+      tituloInput.value = '';
+      cuerpoInput.value = '';
+    }
   });
 
   draw();

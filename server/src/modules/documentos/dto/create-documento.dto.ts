@@ -1,47 +1,44 @@
-import { IsString, IsNotEmpty, IsOptional, IsArray, IsDateString } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsArray, IsDateString, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+
+function toTags(value: unknown): string[] | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (Array.isArray(value)) return value.map(String);
+  return String(value).split(',').map((tag) => tag.trim()).filter(Boolean);
+}
 
 export class CreateDocumentoDto {
-  @IsString()
-  @IsNotEmpty()
+  @IsUUID('4', { message: 'El paciente no es válido' })
   pacienteId: string;
 
   @IsString()
-  @IsNotEmpty()
-  tipo: string; // 'imagen' | 'documento' | 'nota'
-
-  @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'La categoría es obligatoria' })
+  @MaxLength(120, { message: 'La categoría no puede superar 120 caracteres' })
   categoria: string;
 
-  @IsString()
-  @IsNotEmpty()
-  nombre: string;
-
-  @IsDateString()
-  @IsNotEmpty()
-  fecha: string;
-
-  @IsString()
   @IsOptional()
-  fuente?: string;
+  @IsDateString({}, { message: 'La fecha no es válida' })
+  fecha?: string;
 
-  @IsString()
   @IsOptional()
+  @IsString()
+  @MaxLength(120, { message: 'La modalidad no puede superar 120 caracteres' })
   modalidad?: string;
 
-  @IsString()
   @IsOptional()
+  @IsString()
+  @MaxLength(120, { message: 'El técnico no puede superar 120 caracteres' })
   tecnico?: string;
 
-  @IsArray()
   @IsOptional()
+  @Transform(({ value }) => toTags(value))
+  @IsArray({ message: 'Las etiquetas no son válidas' })
+  @IsString({ each: true })
+  @MaxLength(60, { each: true, message: 'Cada etiqueta no puede superar 60 caracteres' })
   tags?: string[];
 
-  @IsString()
   @IsOptional()
+  @IsString()
+  @MaxLength(2_000, { message: 'La descripción no puede superar 2000 caracteres' })
   descripcion?: string;
-
-  @IsString()
-  @IsOptional()
-  tamano?: string;
 }

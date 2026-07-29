@@ -62,6 +62,18 @@ describe('Consultas (e2e)', () => {
         tipo: 'seguimiento',
       })
       .expect(400);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/consultas')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        pacienteId: paciente.id,
+        medicoId: medico.id,
+        fecha: new Date().toISOString(),
+        tipo: 'seguimiento',
+        signosVitales: { imc: 22.9 },
+      })
+      .expect(400);
   });
 
   it('rechaza crear una consulta a nombre de otro medico con 403', async () => {

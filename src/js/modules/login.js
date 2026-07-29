@@ -3,6 +3,7 @@ import { icon } from '../icons.js';
 import { login, registerDoctor, userFacingApiError } from '../services/dataService.js';
 import { navigateTo } from '../router.js';
 import { appState } from '../state.js';
+import { loadThemePreference } from '../theme.js';
 
 const logoUrl = new URL('../../assets/logo.webp', import.meta.url).href;
 
@@ -47,6 +48,11 @@ export function mount(container) {
         setStatus('Comprobando credenciales…');
         try {
           const user = await login(email, password);
+          try {
+            await loadThemePreference();
+          } catch (error) {
+            console.warn('No se pudieron cargar las preferencias de interfaz.', error);
+          }
           appState.setState({ currentUser: user, dataReady: true });
           navigateTo('#/dashboard');
         } catch (error) {

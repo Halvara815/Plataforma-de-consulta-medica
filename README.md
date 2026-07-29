@@ -39,10 +39,10 @@ El prefijo global es `/api/v1`. Los recursos existentes conservan los nombres de
 - Lectura de `/medicos` y edición/activación de perfiles médicos mediante `PATCH /medicos/:id` para quien posee `usuarios:gestionar`
 - CRUD de `/pacientes`, `/citas`, `/consultas`, `/recetas` y `/estudios` con validación de referencias y autoría médica
 - Indicadores agregados protegidos: `GET /indicadores/dashboard` y `GET /indicadores/reportes`
-- CRUD parcial de `/documentos`
+- Documentos protegidos: `POST /documentos` (multipart), `GET /documentos?pacienteId=<uuid>`, `GET /documentos/:id/download`, enlace temporal en `POST /documentos/:id/enlace-descarga`, `PATCH /documentos/:id`, restauración y baja lógica
 - Catálogos clínicos persistentes: `GET /catalogos`, `GET /catalogos/:tipo` y administración protegida en `/catalogos/entradas`
 
-La existencia de un endpoint no significa que esté listo para producción. La primera entrega de identidad ya incluye usuarios, roles, permisos, sesiones revocables, límites de login, expiración por inactividad, detección de reutilización de refresh token, administración básica y auditoría append-only. `pacientes`, `citas`, `consultas`, `recetas`, `estudios` y `medicos` ya cuentan con contrato OpenAPI (`GET /api/docs`) y pruebas de integración (`npm run test:e2e`); `documentos` todavía no tiene su propio corte funcional ni controles operativos de producción.
+La existencia de un endpoint no significa que esté listo para producción. La primera entrega de identidad ya incluye usuarios, roles, permisos, sesiones revocables, límites de login, expiración por inactividad, detección de reutilización de refresh token, administración básica y auditoría append-only. `pacientes`, `citas`, `consultas`, `recetas`, `estudios`, `medicos` y `documentos` cuentan con pruebas de integración (`npm run test:e2e`); el contrato OpenAPI de documentos y los controles operativos de producción quedan pendientes.
 
 ### Listados de Fase 3
 
@@ -162,25 +162,115 @@ Las fases se entregan en cortes verticales: contrato OpenAPI → migración → 
 
 ### Fase 5 — Documentos e imágenes
 
-- Migrar documentos a almacenamiento seguro con validación, antivirus cuando corresponda, URLs temporales firmadas y auditoría de descarga.
+- Implementado: las cargas se reciben como `multipart/form-data`, se validan por tamaño (10 MB configurable), tipo MIME, extensión y firma básica para PDF e imágenes. El archivo se guarda fuera de la base con nombre UUID, permisos restringidos y checksum SHA-256; la base conserva únicamente metadatos y una llave interna no expuesta por la API.
+- Implementado: existe una integración configurable con antivirus por comando. En desarrollo puede quedar desactivada y el documento queda marcado como `no_configurado`; en producción el sistema rechaza cargas y descargas si no existe un escáner configurado que las apruebe.
+- Implementado: los documentos se consultan obligatoriamente por paciente, se descargan mediante una ruta autenticada con `documentos:leer` y pueden usar enlaces firmados de duración configurable (cinco minutos por defecto). La descarga firmada registra el usuario que la emitió, sin incluir el token en la auditoría.
+- Implementado: las bajas son lógicas, conservan responsable y fecha, y se pueden restaurar mediante `PATCH /documentos/:id/restaurar`. Las cargas, lecturas, descargas, ediciones, restauraciones y bajas quedan cubiertas por auditoría.
+- Implementado: la pantalla de Imágenes / Documentos carga mediante la API y deja de conservar blobs clínicos en memoria/localStorage.
+- Pendiente antes de producción: seleccionar/configurar almacenamiento de objetos y el comando antivirus de la infraestructura, definir la política de purga posterior al período de retención, DICOMweb y pruebas visuales automatizadas.
 - Integrar DICOMweb únicamente cuando exista un flujo clínico y servidor aprobados.
 
-**Salida:** ningún documento clínico se guarda en el navegador ni en un directorio local de producción.
+**Salida actual:** ningún documento cargado se guarda en el navegador; el almacenamiento local es exclusivo de desarrollo y no está autorizado para producción.
 
 ### Fase 6 — Retiro de persistencia local
 
-- Migrar notas, plantillas, firmas, favoritos y preferencias que deban sincronizarse.
-- Retirar los imports runtime de JSON, IndexedDB, `storage.js`, exportación/importación de demo y reinicios de datos.
+- Implementado: las preferencias de interfaz, notas, recordatorios, plantillas y favoritos ahora pertenecen a la cuenta autenticada y se sincronizan mediante `GET/PATCH /preferencias`.
+- Implementado: las firmas se guardan como PNG protegidos fuera de la base de datos, con checksum, validación de tipo/tamaño (1 MB), análisis antivirus configurable, límite de 12 por usuario y controles de propiedad. Ninguna clave interna de almacenamiento se expone por la API.
+- Implementado: restablecer Herramientas elimina los datos personales y firmas del usuario, sin afectar información clínica ni la configuración de otras cuentas.
+- Retirado: no quedan imports runtime de JSON, IndexedDB, `storage.js`, `localStorage`, exportación/importación de demo ni reinicios locales de datos.
 
-**Salida:** ningún módulo funcional o clínico depende de persistencia local.
+**Salida verificada:** ningún módulo funcional o clínico depende de persistencia local; los datos auxiliares que requieren sincronización son privados por usuario y están cubiertos por autenticación, auditoría y pruebas de integración.
 
-### Fase 7 — Operación y despliegue
+### Fase 7 — Estabilización funcional, entorno visual y despliegue
+
+> **Condición de entrada:** esta fase no inicia el despliegue a producción. Primero se corrigen los fallos reproducibles y se homogeneiza la interfaz mostrada en el entorno de diseño.
+
+#### Fase 7.1 — Corrección de carga y contexto clínico
+
+- Corregir el error reproducible en `#/pacientes`: la lista de pacientes no debe requerir un identificador de paciente ni reutilizar un contexto inválido de expediente. El listado, búsqueda, alta y navegación al expediente deben funcionar por separado.
+- Revisar Historia Clínica, consultas, recetas, estudios e Imágenes / Documentos para que cada pantalla declare de forma explícita si necesita un paciente seleccionado. Cuando falte, debe mostrar una guía accionable para seleccionarlo, nunca un error técnico o una sección vacía.
+- Corregir el fallo de carga visible en Herramientas > Calendario y revisar los módulos asíncronos de Herramientas para que esperen los datos de la API antes de iterarlos o dibujarlos.
+- Unificar los estados de carga, vacío, error y reintento; conservar el mensaje técnico solo en consola/auditoría y mostrar al usuario una explicación clara.
+
+**Salida:** Pacientes, Historia Clínica, Documentos y Herramientas cargan sin errores de contexto ni pantallas bloqueadas.
+
+**Avance actual:** corregido el bloqueo de Pacientes causado por consultar documentos sin `pacienteId`, el Calendario que intentaba usar las citas antes de recibir la respuesta de la API y las rutas sin paciente válido de Historia Clínica e Imágenes / Documentos. Falta la comprobación visual manual con una sesión autenticada antes de marcar la subfase como aceptada.
+
+#### Fase 7.2 — Flujo clínico de Imágenes / Documentos
+
+- Rediseñar el selector de paciente y el formulario de carga con etiquetas, ayuda, validación visible, estados deshabilitados y mensajes de resultado consistentes.
+- Mantener el requisito de asociar toda carga a un paciente, pero permitir buscarlo y seleccionarlo sin abandonar el módulo.
+- Mejorar la lista de documentos: estado vacío informativo, metadatos legibles, acciones de descarga/edición/restauración y retroalimentación de carga o error.
+- Validar visual y funcionalmente los tipos de archivo, tamaño máximo y errores del backend.
+
+**Salida:** un médico puede seleccionar un paciente, cargar, consultar y descargar documentos sin ambigüedad visual.
+
+**Avance actual:** el selector y formulario de carga ya usan la jerarquía visual del sistema, permiten buscar pacientes, validan el contexto, el tipo y el tamaño del archivo antes de activar la carga y explican los estados iniciales. La lista separa documentos activos y archivados; los archivados quedan retenidos para trazabilidad y se pueden restaurar mediante la API con los mismos permisos clínicos. La clase compartida `form-input` también hereda el estilo moderno de los campos del sistema, por lo que Administración deja de mostrar controles nativos sin formato. Falta la revisión visual autenticada antes de aceptar la subfase.
+
+#### Fase 7.3 — Contratos de persistencia y respuesta de guardado
+
+- Inventariar cada acción que crea, edita, elimina, archiva o restaura datos y comprobar la cadena completa: formulario → payload del frontend → ruta, permisos y DTO de la API → entidad, migración y consulta de lectura.
+- Corregir el alta de pacientes para enviar únicamente campos admitidos por `CreatePacienteDto`; no cerrar el modal ni navegar hasta que la API confirme la creación. Los campos generados por la base (`id`, fecha de registro y estado por defecto) no deben enviarse desde el navegador.
+- Resolver Referencias / Interconsultas con un modelo persistente y migración propios, o retirar temporalmente la acción de guardado. No se deben enviar propiedades que no existan en el DTO y en la entidad de `Paciente`.
+- Corregir todas las consultas de documentos del expediente para incluir `pacienteId` en la API, en particular Dashboard, Documentos e Imágenes médicas; los filtros en navegador no sustituyen el contexto obligatorio del backend.
+- Estandarizar los guardados: botón bloqueado durante la petición, mensaje de progreso, error visible y accesible, preservación de los valores del formulario y confirmación solo después de una respuesta exitosa. Ninguna excepción de red, validación o permisos debe quedar únicamente en la consola.
+- Añadir pruebas de integración para altas y actualizaciones de cada módulo, incluyendo payload inválido, permiso insuficiente, error de red simulado y comprobación de persistencia después de recargar la vista.
+
+**Hallazgos iniciales:** el formulario Nuevo paciente envía `foto`, `referencias`, `estado` y `fechaRegistro`, pero la API usa `ValidationPipe` con `forbidNonWhitelisted: true` y esos campos no pertenecen a `CreatePacienteDto`; por ello la petición se rechaza. El manejador no tiene `try/catch`, por lo que el usuario no recibe el motivo. Referencias repite el problema con `referencias`, una propiedad que tampoco existe en la entidad `Paciente`.
+
+**Salida:** cada operación de guardado confirma la persistencia o explica claramente por qué no se realizó; no quedan módulos que simulen éxito, oculten una excepción o dependan de campos fuera de contrato.
+
+**Avance actual:** implementado el contrato de alta de pacientes compatible con la API, con error visible y sin cerrar el modal hasta recibir confirmación. Referencias / Interconsultas ahora usa el recurso persistente `/referencias`, respaldado por la migración `1785340000000-ClinicalReferences`, permisos de pacientes, validación de paciente activo y auditoría global. Dashboard, Documentos e Imágenes médicas del expediente ya envían el `pacienteId` obligatorio al consultar archivos. También se añadieron pruebas de integración para altas de pacientes, referencias y permisos; la regresión completa termina con 12 suites y 47 pruebas aprobadas. Falta la revisión visual manual autenticada antes de aceptar formalmente la subfase.
+
+#### Fase 7.4 — Compatibilidad de payloads clínicos anidados
+
+- Inventariar y comparar los datos anidados que generan los formularios clínicos con sus DTOs: signos vitales, antecedentes, diagnósticos, medicamentos, interacciones, estudios, preferencias y metadatos de documentos.
+- Establecer una sola responsabilidad para los valores derivados. El navegador puede mostrarlos, pero no debe enviar campos calculados o administrados por el servidor, como el IMC cuando el backend ya lo normaliza.
+- Omitir campos opcionales vacíos en lugar de enviar cadenas vacías, `null` o tipos incompatibles que fallen validación anidada. Convertir números, fechas y listas de manera explícita antes de realizar la solicitud.
+- Crear adaptadores de payload reutilizables por módulo, con tipos/documentación alineados al contrato OpenAPI y sin duplicar estructuras de DTO en cada vista.
+- Homogeneizar la respuesta de validación de formularios clínicos: resaltar el grupo con error, conservar la información capturada, describir el campo rechazado en lenguaje claro y no navegar hasta obtener confirmación.
+- Añadir pruebas de contrato para cada payload anidado, cubriendo valores permitidos, omisiones válidas, tipos inválidos y propiedades no permitidas por `ValidationPipe`.
+
+**Hallazgos iniciales:** Consulta médica envía `signosVitales.imc`, aunque `SignosVitalesDto` no lo admite y `ConsultasService` lo calcula internamente; por ello aparece el error `signosVitales.property imc should not exist`. También se envía `ta: ''` cuando no se registra presión arterial, pero el DTO solo permite omitir el campo o enviar el formato `NNN/NNN`.
+
+**Salida:** ningún formulario clínico envía propiedades fuera de contrato ni valores vacíos incompatibles; los cálculos clínicos se conservan en el servidor y los errores se muestran junto al campo correspondiente.
+
+**Avance actual:** completado. Consulta médica omite signos vitales y antecedentes vacíos, no envía `signosVitales.imc` y deja el cálculo de IMC exclusivamente en `ConsultasService`. La prueba de integración verifica que un IMC recibido desde el cliente sea rechazado y que el servidor calcule el IMC al recibir peso y talla válidos. La auditoría de Recetas, Estudios, Preferencias y Documentos no encontró campos anidados adicionales fuera de contrato; Estudios permanece sin formulario de creación en la interfaz. La regresión completa finaliza con 12 suites y 47 pruebas aprobadas.
+
+#### Fase 7.5 — Sistema visual de formularios
+
+- Auditar todos los `input`, `select`, `textarea`, checkbox, radios, campos de archivo, etiquetas y ayudas de Administración, Herramientas, Documentos y módulos clínicos.
+- Sustituir controles nativos sin estilo por componentes o clases compartidas del sistema: altura, tipografía, espaciado, bordes, foco, error, estado deshabilitado y contraste accesible.
+- Normalizar la cuadrícula de formularios, anchos de campo, alineación de acciones y la jerarquía de tarjetas para escritorio, tablet y móvil.
+- No usar estilos inline para decisiones repetidas de formularios; consolidar los tokens y clases reutilizables en la hoja de estilos/componentes comunes.
+
+**Salida:** los formularios conservan la paleta actual, pero presentan una apariencia moderna, consistente y accesible en todos los módulos.
+
+#### Fase 7.6 — Revisión visual por módulo
+
+- Prioridad 1: Administración, Imágenes / Documentos, Historia Clínica y Pacientes.
+- Prioridad 2: Herramientas, Agenda, Recetas, Reportes y Configuración.
+- Revisar encabezados, buscador, barras laterales, espaciado, tarjetas, tablas, mensajes de error y vistas vacías para evitar componentes comprimidos, textos truncados o controles desalineados.
+- Mantener coherencia con los colores, iconografía y lenguaje visual existentes; el objetivo es pulir la interfaz, no reemplazar su identidad.
+
+**Salida:** cada módulo prioritario tiene una captura de referencia aprobada en escritorio y móvil.
+
+#### Fase 7.7 — Pruebas de regresión visual y funcional
+
+- Añadir pruebas de interfaz automatizadas para inicio de sesión, listado/búsqueda de pacientes, apertura de expediente, carga de documento, Administración y Herramientas.
+- Comprobar cada estado: cargando, sin datos, error, permisos insuficientes, validación de formulario y operación exitosa.
+- Ejecutar pruebas contra datos sintéticos y una base aislada; no usar información clínica real en capturas, logs o fixtures.
+- Definir una lista manual de aceptación visual con resoluciones de escritorio, tablet y móvil antes de aceptar cada subfase.
+
+**Salida:** no se aceptan regresiones funcionales o visuales sin una prueba que las detecte.
+
+#### Fase 7.8 — Operación y despliegue
 
 - Completar OpenAPI, pruebas unitarias, integración y extremo a extremo.
 - Añadir Nginx, HTTPS, CORS, CSRF, cabeceras, backups cifrados con restauración probada, métricas, alertas y CI/CD.
-- Desplegar primero en staging con plan de reversión.
+- Desplegar primero en staging con plan de reversión, una vez aprobadas las subfases 7.1 a 7.7.
 
-**Salida:** todos los controles de seguridad, pruebas, migraciones y operación están verificados antes de producción.
+**Salida final:** todos los controles de seguridad, pruebas, migraciones, estabilidad funcional y experiencia visual están verificados antes de producción.
 
 ## Comandos de desarrollo
 

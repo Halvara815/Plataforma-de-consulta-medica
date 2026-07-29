@@ -6,7 +6,7 @@ const TYPE_ICON = { documento: 'file-text', nota: 'note' };
 
 export async function render(paciente, panelEl) {
   const documentos = (
-    await queryCollection('documentos', (d) => d.pacienteId === paciente.id && d.tipo !== 'imagen')
+    await queryCollection('documentos', (d) => d.tipo !== 'imagen', { pacienteId: paciente.id })
   ).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
   panelEl.innerHTML = `

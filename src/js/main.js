@@ -1,5 +1,5 @@
 import './theme.js';
-import { initTheme } from './theme.js';
+import { initTheme, loadThemePreference } from './theme.js';
 import { appState, toggleSidebarMobile } from './state.js';
 import { initDataService, restoreSession } from './services/dataService.js';
 import { mountSidebar } from './components/sidebar.js';
@@ -46,6 +46,11 @@ async function restoreExistingSession() {
   try {
     await initDataService();
     const currentUser = await restoreSession();
+    try {
+      await loadThemePreference();
+    } catch (error) {
+      console.warn('No se pudieron cargar las preferencias de interfaz.', error);
+    }
     appState.setState({ currentUser, dataReady: true });
     navigateTo('#/dashboard');
   } catch (error) {

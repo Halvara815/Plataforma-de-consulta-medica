@@ -2,6 +2,7 @@ import { navigateTo } from '../router.js';
 import { toggleSidebarMobile } from '../state.js';
 import { getTheme, toggleTheme } from '../theme.js';
 import { icon } from '../icons.js';
+import { showToast } from './toast.js';
 
 const MOCK_NOTIFICATIONS = [
   { title: '5 resultados de laboratorio pendientes', time: 'Hace 1 hora' },
@@ -43,8 +44,13 @@ export function mountTopbar(container, { title = 'Panel General', subtitle = '' 
 
   container.querySelector('#hamburger-toggle').addEventListener('click', () => toggleSidebarMobile());
 
-  container.querySelector('#theme-toggle-btn').addEventListener('click', () => {
-    toggleTheme();
+  container.querySelector('#theme-toggle-btn').addEventListener('click', async () => {
+    try {
+      await toggleTheme();
+      updateThemeIcon();
+    } catch {
+      showToast({ message: 'No se pudo sincronizar el tema. Intenta de nuevo.', tone: 'warning' });
+    }
   });
 
   const searchInput = container.querySelector('#topbar-search-input');

@@ -17,6 +17,8 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { AuditService } from './modules/auth/audit.service';
 import { UsuariosModule } from './modules/usuarios/usuarios.module';
 import { IndicadoresModule } from './modules/indicadores/indicadores.module';
+import { PreferenciasModule } from './modules/preferencias/preferencias.module';
+import { ReferenciasModule } from './modules/referencias/referencias.module';
 
 
 
@@ -63,6 +65,8 @@ import { IndicadoresModule } from './modules/indicadores/indicadores.module';
     HealthModule,
     UsuariosModule,
     IndicadoresModule,
+    PreferenciasModule,
+    ReferenciasModule,
   ],
   controllers: [],
   providers: [

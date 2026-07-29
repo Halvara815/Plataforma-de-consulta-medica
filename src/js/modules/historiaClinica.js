@@ -8,14 +8,28 @@ import { icon } from '../icons.js';
 let cleanupFns = [];
 
 export async function mount(container, params = {}) {
-  const paciente = await getById('pacientes', params.id);
-
-  if (!paciente) {
-    container.innerHTML = '<div class="empty-state">Paciente no encontrado.</div>';
+  setTopbarTitle('Historia Clínica', 'Registro clínico completo y longitudinal del paciente');
+  if (!params.id) {
+    container.innerHTML = `
+      <div class="view">
+        <div class="view-header"><div><h1>Historia Clínica</h1><p>Selecciona un paciente para consultar su expediente clínico.</p></div></div>
+        <div class="card"><div class="empty-state"><p>La historia clínica siempre está vinculada a un paciente.</p><a class="btn btn-primary" href="#/pacientes">Abrir directorio de pacientes</a></div></div>
+      </div>
+    `;
     return;
   }
-
-  setTopbarTitle('Historia Clínica', 'Registro clínico completo y longitudinal del paciente');
+  let paciente;
+  try {
+    paciente = await getById('pacientes', params.id);
+  } catch {
+    container.innerHTML = `
+      <div class="view">
+        <div class="view-header"><div><h1>Historia Clínica</h1><p>No se pudo abrir el expediente solicitado.</p></div></div>
+        <div class="card"><div class="empty-state"><p>El paciente no existe, ya no está disponible o el enlace es inválido.</p><a class="btn btn-primary" href="#/pacientes">Volver al directorio</a></div></div>
+      </div>
+    `;
+    return;
+  }
 
   const consultas = (await queryCollection('consultas', null, { pacienteId: paciente.id })).sort(
     (a, b) => new Date(b.fecha) - new Date(a.fecha)

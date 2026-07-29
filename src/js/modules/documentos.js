@@ -1,526 +1,381 @@
-import { getAll, getById, create, update, remove } from '../services/dataService.js';
-import { appState } from '../state.js';
-import { setTopbarTitle } from '../components/topbar.js';
 import { cardHtml } from '../components/card.js';
-import { openModal } from '../components/modal.js';
-import { textField, selectField, textareaField, getFormData, validateRequired } from '../components/form.js';
+import { setTopbarTitle } from '../components/topbar.js';
 import { showToast } from '../components/toast.js';
-import { escapeHtml, formatDate, formatBytes, downloadBlob } from '../utils.js';
+import { downloadDocument, getAll, getById, remove, restoreDocument, update, uploadDocument, userFacingApiError } from '../services/dataService.js';
+import { escapeHtml, formatBytes, formatDate, downloadBlob } from '../utils.js';
 import { icon } from '../icons.js';
 
 const CATEGORIAS = [
-  'Radiografía',
-  'Resonancia',
-  'Tomografía',
-  'Ecografía',
-  'Fotografía clínica',
-  'Laboratorio',
-  'Receta',
-  'Consentimiento',
-  'Informe médico',
-  'Electrocardiograma',
-  'DICOM',
-  'Evolución',
-  'Nota',
-  'Otro'
+  'Radiografía', 'Resonancia', 'Tomografía', 'Ecografía', 'Fotografía clínica',
+  'Laboratorio', 'Receta', 'Consentimiento', 'Informe médico', 'Electrocardiograma',
+  'Evolución', 'Nota', 'Otro',
 ];
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const ALLOWED_EXTENSIONS = new Set(['pdf', 'jpg', 'jpeg', 'png', 'webp', 'txt', 'csv', 'doc', 'docx', 'xls', 'xlsx']);
 
-const EXT_CATEGORY = {
-  pdf: 'Informe médico',
-  doc: 'Informe médico',
-  docx: 'Informe médico',
-  xls: 'Laboratorio',
-  xlsx: 'Laboratorio',
-  csv: 'Laboratorio',
-  txt: 'Nota',
-  dcm: 'DICOM'
-};
+let container;
+let patients = [];
+let state = { pacienteId: '', documentos: [], selectedId: null, estado: 'activo' };
+let patientContextMessage = '';
+let patientSearchTimer = null;
+let patientSearchRequest = 0;
 
-const EXT_ICON = {
-  pdf: 'file-text',
-  doc: 'file-text',
-  docx: 'file-text',
-  xls: 'file-spreadsheet',
-  xlsx: 'file-spreadsheet',
-  csv: 'file-spreadsheet',
-  txt: 'file-text',
-  dcm: 'file'
-};
-
-let state = {
-  tipo: 'todos',
-  categoria: '',
-  search: '',
-  selectedId: null,
-  pacienteFiltro: null,
-  view: 'list'
-};
-
-let objectUrls = new Map(); // docId -> { blob, url }
-let uploadQueue = [];
-let uploadSeq = 0;
-let cleanupFns = [];
-
-function ext(filename = '') {
-  const m = /\.([a-z0-9]+)$/i.exec(filename);
-  return m ? m[1].toLowerCase() : '';
-}
-
-function guessCategoria(file) {
-  return EXT_CATEGORY[ext(file.name)] || (file.type.startsWith('image/') ? 'Fotografía clínica' : 'Otro');
-}
-
-function tipoIconFor(doc) {
-  if (doc.tipo === 'imagen') return 'image';
-  if (doc.tipo === 'nota') return 'note';
-  return EXT_ICON[ext(doc.nombre)] || 'file-text';
-}
-
-function objectUrlFor(doc) {
-  if (!doc.blob) return null;
-  const cached = objectUrls.get(doc.id);
-  if (cached && cached.blob === doc.blob) return cached.url;
-  if (cached) URL.revokeObjectURL(cached.url);
-  const url = URL.createObjectURL(doc.blob);
-  objectUrls.set(doc.id, { blob: doc.blob, url });
-  return url;
-}
-
-function revokeAllObjectUrls() {
-  objectUrls.forEach(({ url }) => URL.revokeObjectURL(url));
-  objectUrls.clear();
-}
-
-export async function mount(container, params = {}, query = {}) {
-  setTopbarTitle('Imágenes / Documentos', 'Gestor completo de archivos e imágenes clínicas');
-  const { currentUser } = appState.getState();
-
+export async function mount(element, params = {}, query = {}) {
+  container = element;
+  setTopbarTitle('Imágenes / Documentos', 'Archivos clínicos protegidos por paciente');
+  patients = await getAll('pacientes', { page: 1, limit: 100, estado: 'activo' });
+  const requestedPatientId = query.pacienteId || '';
+  let requestedPatient = patients.find((patient) => patient.id === requestedPatientId);
+  if (requestedPatientId && !requestedPatient) {
+    requestedPatient = await getById('pacientes', requestedPatientId).catch(() => null);
+    if (requestedPatient?.estado === 'activo') patients = [requestedPatient, ...patients];
+  }
+  const hasRequestedPatient = requestedPatient?.estado === 'activo';
+  patientContextMessage = requestedPatientId && !hasRequestedPatient
+    ? 'El paciente solicitado no está disponible. Selecciona un paciente activo para consultar sus documentos.'
+    : '';
   state = {
-    tipo: query.tipo && ['imagen', 'documento', 'nota'].includes(query.tipo) ? query.tipo : 'todos',
-    categoria: '',
-    search: '',
-    selectedId: query.doc || null,
-    pacienteFiltro: query.pacienteId || null,
-    view: 'list'
+    pacienteId: hasRequestedPatient ? requestedPatientId : '',
+    documentos: [],
+    selectedId: null,
+    estado: query.estado === 'eliminado' ? 'eliminado' : 'activo',
   };
-  uploadQueue = [];
-
-  container.innerHTML = `
-    <div class="view">
-      <div class="view-header">
-        <div>
-          <h1>Imágenes / Documentos Médicos</h1>
-          <p>Cargue, organice y administre estudios, imágenes y documentos clínicos.</p>
-        </div>
-        <div class="view-actions">
-          <button type="button" class="btn btn-primary" id="btn-subir-archivo">${icon('upload', { size: 15 })} Subir archivo</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Zona de carga de archivos">
-          ${icon('upload-cloud')}
-          <strong>Arrastra archivos aquí o haz clic para seleccionar</strong>
-          <span class="text-tertiary" style="font-size:12px;">Imágenes (radiografías, resonancias, tomografías, ecografías, fotos clínicas) y documentos (PDF, Word, Excel, TXT)</span>
-          <input type="file" id="file-input" multiple style="display:none;" />
-        </div>
-        <div id="upload-queue" class="upload-queue" style="margin-top:12px;"></div>
-      </div>
-
-      <div class="two-col">
-        <div class="card">
-          <div class="stack" style="gap:10px;">
-            <div class="file-toolbar">
-              <div class="table-search" style="flex:1;">
-                ${icon('search', { size: 16 })}
-                <input type="search" id="doc-search" placeholder="Buscar archivos por nombre, categoría o etiqueta…" />
-              </div>
-              <div class="view-toggle" role="group" aria-label="Cambiar vista">
-                <button type="button" data-view="list" class="is-active" aria-label="Vista de lista" aria-pressed="true">${icon('list', { size: 16 })}</button>
-                <button type="button" data-view="grid" aria-label="Vista de cuadrícula" aria-pressed="false">${icon('grid', { size: 16 })}</button>
-              </div>
-            </div>
-            <div class="tabs" role="tablist" id="doc-type-tabs">
-              ${['todos', 'imagen', 'documento', 'nota']
-                .map(
-                  (t) =>
-                    `<button type="button" class="tab-btn${t === state.tipo ? ' is-active' : ''}" data-tipo="${t}" role="tab" aria-selected="${t === state.tipo}">${t === 'todos' ? 'Todos' : t === 'imagen' ? 'Imágenes' : t === 'documento' ? 'Documentos' : 'Notas'}</button>`
-                )
-                .join('')}
-            </div>
-            ${selectField({ name: 'categoria-filter', label: 'Filtrar por categoría', value: '', options: [{ value: '', label: 'Todas las categorías' }, ...CATEGORIAS.map((c) => ({ value: c, label: c }))] })}
-            <div class="text-tertiary" id="doc-count" style="font-size:11.5px;"></div>
-            <div id="doc-list"></div>
-          </div>
-        </div>
-        <div class="stack">
-          <div id="doc-viewer"></div>
-          <div id="doc-info"></div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  render();
-
-  const dropzone = document.getElementById('dropzone');
-  const fileInput = document.getElementById('file-input');
-
-  document.getElementById('btn-subir-archivo').addEventListener('click', () => fileInput.click());
-  dropzone.addEventListener('click', () => fileInput.click());
-  dropzone.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      fileInput.click();
-    }
-  });
-  ['dragenter', 'dragover'].forEach((evt) =>
-    dropzone.addEventListener(evt, (e) => {
-      e.preventDefault();
-      dropzone.classList.add('is-dragover');
-    })
-  );
-  ['dragleave', 'drop'].forEach((evt) =>
-    dropzone.addEventListener(evt, (e) => {
-      e.preventDefault();
-      dropzone.classList.remove('is-dragover');
-    })
-  );
-  dropzone.addEventListener('drop', (e) => {
-    if (e.dataTransfer?.files?.length) handleFiles(e.dataTransfer.files, currentUser);
-  });
-  fileInput.addEventListener('change', (e) => {
-    if (e.target.files?.length) handleFiles(e.target.files, currentUser);
-    fileInput.value = '';
-  });
-
-  document.getElementById('doc-search').addEventListener('input', (e) => {
-    state.search = e.target.value;
-    render();
-  });
-  document.getElementById('doc-type-tabs').addEventListener('click', (e) => {
-    if (!e.target.matches('[data-tipo]')) return;
-    state.tipo = e.target.dataset.tipo;
-    document.querySelectorAll('#doc-type-tabs .tab-btn').forEach((b) => {
-      const isActive = b === e.target;
-      b.classList.toggle('is-active', isActive);
-      b.setAttribute('aria-selected', String(isActive));
-    });
-    render();
-  });
-  document.getElementById('f-categoria-filter').addEventListener('change', (e) => {
-    state.categoria = e.target.value;
-    render();
-  });
-  document.querySelectorAll('.view-toggle [data-view]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      state.view = btn.dataset.view;
-      document.querySelectorAll('.view-toggle [data-view]').forEach((b) => {
-        const isActive = b === btn;
-        b.classList.toggle('is-active', isActive);
-        b.setAttribute('aria-pressed', String(isActive));
-      });
-      renderList(getFilteredDocs());
-    });
-  });
-
-  if (query.action === 'subir') fileInput.click();
+  renderShell();
+  bindShellEvents();
+  if (state.pacienteId) await loadDocuments();
 }
 
-function handleFiles(fileList, currentUser) {
-  Array.from(fileList).forEach((file) => {
-    const uploadId = `up-${++uploadSeq}`;
-    const item = { uploadId, name: file.name, progress: 0 };
-    uploadQueue.push(item);
-    renderUploadQueue();
-
-    const reader = new FileReader();
-    reader.onprogress = (e) => {
-      if (e.lengthComputable) {
-        item.progress = Math.round((e.loaded / e.total) * 100);
-        renderUploadQueue();
-      }
-    };
-    reader.onerror = () => {
-      uploadQueue = uploadQueue.filter((u) => u.uploadId !== uploadId);
-      renderUploadQueue();
-      showToast({ message: `No se pudo leer "${file.name}".`, tone: 'danger' });
-    };
-    reader.onload = async () => {
-      item.progress = 100;
-      renderUploadQueue();
-      const nuevo = await create('documentos', {
-        pacienteId: state.pacienteFiltro,
-        tipo: file.type.startsWith('image/') ? 'imagen' : 'documento',
-        categoria: guessCategoria(file),
-        nombre: file.name,
-        fecha: new Date().toISOString(),
-        fuente: 'Carga manual',
-        modalidad: '',
-        tecnico: '',
-        mimeType: file.type,
-        sizeBytes: file.size,
-        blob: file,
-        uploadedBy: currentUser.nombre,
-        tags: [],
-        descripcion: '',
-        tamano: formatBytes(file.size)
-      });
-      setTimeout(() => {
-        uploadQueue = uploadQueue.filter((u) => u.uploadId !== uploadId);
-        renderUploadQueue();
-      }, 500);
-      state.selectedId = nuevo.id;
-      render();
-      showToast({ message: `"${file.name}" se cargó correctamente.`, tone: 'success' });
-    };
-    reader.readAsArrayBuffer(file);
-  });
+function patientOptions(filter = '') {
+  const normalizedFilter = filter.trim().toLocaleLowerCase();
+  const visiblePatients = normalizedFilter
+    ? patients.filter((patient) => `${patient.nombre} ${patient.apellidos}`.toLocaleLowerCase().includes(normalizedFilter))
+    : patients;
+  const selectedPatient = state.pacienteId && !visiblePatients.some((patient) => patient.id === state.pacienteId)
+    ? patients.find((patient) => patient.id === state.pacienteId)
+    : null;
+  return [
+    "<option value=''>Selecciona un paciente para consultar sus documentos</option>",
+    ...(selectedPatient ? [selectedPatient] : []),
+    ...visiblePatients,
+  ].map((patient) => {
+    if (!patient.id) return patient;
+    const selected = patient.id === state.pacienteId ? ' selected' : '';
+    return "<option value='" + escapeHtml(patient.id) + "'" + selected + ">" +
+      escapeHtml(patient.nombre + ' ' + patient.apellidos) + '</option>';
+  }).join('');
 }
 
-function renderUploadQueue() {
-  const el = document.getElementById('upload-queue');
-  if (!el) return;
-  el.innerHTML = uploadQueue
-    .map(
-      (u) => `
-      <div class="upload-progress-row">
-        <span style="min-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(u.name)}</span>
-        <div class="upload-progress"><div class="upload-progress-bar" style="width:${u.progress}%;"></div></div>
-        <span style="width:36px; text-align:right;">${u.progress}%</span>
-      </div>`
-    )
+function renderShell() {
+  const categoryOptions = CATEGORIAS
+    .map((category) => "<option value='" + escapeHtml(category) + "'>" + escapeHtml(category) + '</option>')
     .join('');
+
+  container.innerHTML = [
+    "<div class='view'>",
+    "  <div class='view-header'>",
+    "    <div><h1>Imágenes / Documentos</h1><p>La carga se almacena en el backend y queda vinculada al expediente seleccionado.</p></div>",
+    '  </div>',
+    "  <div class='card'>",
+    "    <div class='card-header'><div><h2>Cargar archivo clínico</h2><p class='text-tertiary' style='font-size:12px; font-weight:400; margin-top:4px;'>Asocia el archivo al expediente correcto antes de cargarlo.</p></div></div>",
+    patientContextMessage ? "    <div class='empty-state' role='status' style='padding:10px; text-align:left;'>" + escapeHtml(patientContextMessage) + '</div>' : '',
+    "    <div class='form-grid' style='max-width:760px; margin-bottom:16px;'>",
+    "      <div class='form-field'><label for='document-patient-search'>Buscar paciente</label><input class='input' id='document-patient-search' type='search' autocomplete='off' placeholder='Nombre o apellido' /><span class='hint'>Filtra la lista de expedientes disponibles.</span></div>",
+    "      <div class='form-field'><label for='document-patient'>Paciente</label><select class='input' id='document-patient'>" + patientOptions() + "</select><span class='hint'>La lista y el formulario se actualizan al seleccionar un expediente.</span></div>",
+    '    </div>',
+    "    <form id='document-upload-form' class='form-grid'>",
+    "      <div class='form-field span-2'><label for='document-file'>Archivo</label><input class='input' id='document-file' name='file' type='file' required accept='.pdf,.jpg,.jpeg,.png,.webp,.txt,.csv,.doc,.docx,.xls,.xlsx' /><span class='hint'>Máximo 10 MB. Se permiten PDF, imágenes y documentos ofimáticos.</span></div>",
+    "      <div class='form-field'><label for='document-category'>Categoría</label><select class='input' id='document-category' name='categoria' required>" + categoryOptions + '</select></div>',
+    "      <div class='form-field'><label for='document-tags'>Etiquetas</label><input class='input' id='document-tags' name='tags' maxlength='300' placeholder='control, laboratorio' /><span class='hint'>Separa las etiquetas con comas.</span></div>",
+    "      <div class='form-field span-2'><label for='document-description'>Descripción</label><textarea class='input' id='document-description' name='descripcion' rows='3' maxlength='2000' placeholder='Descripción clínica opcional'></textarea></div>",
+    "      <div class='form-field span-2'><div class='view-actions'><button class='btn btn-primary' type='submit' data-role='upload-submit'" + (state.pacienteId ? '' : ' disabled') + ">" + icon('upload', { size: 16 }) + " Cargar archivo</button><span class='text-tertiary' data-role='upload-status' style='font-size:12px;'>Selecciona un paciente y un archivo para continuar.</span></div></div>",
+    '    </form>',
+    '  </div>',
+    "  <div class='two-col'>",
+    "    <section class='card'><div class='card-header'><div><h2>Archivos del expediente</h2><p class='text-tertiary' style='font-size:12px; font-weight:400; margin-top:4px;'>Consulta los archivos activos o recupera los archivados.</p></div></div><div class='view-actions' data-role='document-status-tabs'><button type='button' class='btn btn-sm " + (state.estado === 'activo' ? 'btn-primary' : 'btn-secondary') + "' data-document-status='activo'>Activos</button><button type='button' class='btn btn-sm " + (state.estado === 'eliminado' ? 'btn-primary' : 'btn-secondary') + "' data-document-status='eliminado'>Archivados</button></div><div id='document-list' style='margin-top:16px;'></div></section>",
+    "    <section id='document-detail'></section>",
+    '  </div>',
+    '</div>',
+  ].join('');
 }
 
-function getFilteredDocs() {
-  let docs = getAll('documentos');
-  if (state.pacienteFiltro) docs = docs.filter((d) => d.pacienteId === state.pacienteFiltro);
-  if (state.tipo !== 'todos') docs = docs.filter((d) => d.tipo === state.tipo);
-  if (state.categoria) docs = docs.filter((d) => d.categoria === state.categoria);
-  if (state.search) {
-    const term = state.search.toLowerCase();
-    docs = docs.filter((d) => `${d.nombre} ${d.categoria} ${(d.tags || []).join(' ')}`.toLowerCase().includes(term));
-  }
-  return [...docs].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-}
+function bindShellEvents() {
+  container.querySelector('#document-patient-search').addEventListener('input', (event) => {
+    window.clearTimeout(patientSearchTimer);
+    patientSearchTimer = window.setTimeout(() => {
+      refreshPatientOptions(event.target.value);
+    }, 250);
+  });
 
-function render() {
-  const docs = getFilteredDocs();
-  if (!state.selectedId || !docs.some((d) => d.id === state.selectedId)) {
-    state.selectedId = docs[0]?.id || null;
-  }
-  const countEl = document.getElementById('doc-count');
-  if (countEl) countEl.textContent = `${docs.length} archivo(s)`;
-  renderList(docs);
-  renderViewer(docs.find((d) => d.id === state.selectedId));
-}
+  container.querySelector('#document-patient').addEventListener('change', async (event) => {
+    state.pacienteId = event.target.value;
+    state.selectedId = null;
+    container.querySelector('[data-role="upload-submit"]').disabled = !state.pacienteId;
+    container.querySelector('[data-role="upload-status"]').textContent = state.pacienteId
+      ? 'Selecciona un archivo para cargarlo en este expediente.'
+      : 'Selecciona un paciente y un archivo para continuar.';
+    await loadDocuments();
+  });
 
-function renderList(docs) {
-  const el = document.getElementById('doc-list');
-  if (!docs.length) {
-    el.innerHTML = '<div class="empty-state">Sin archivos que coincidan.</div>';
-    return;
-  }
-
-  if (state.view === 'grid') {
-    el.innerHTML = `<div class="file-grid">
-      ${docs
-        .map(
-          (d) => `
-        <div class="file-card${d.id === state.selectedId ? ' is-active' : ''}" data-doc-id="${d.id}">
-          <div class="file-card-thumb">${d.tipo === 'imagen' && objectUrlFor(d) ? `<img src="${objectUrlFor(d)}" alt="" />` : icon(tipoIconFor(d), { size: 26 })}</div>
-          <div class="file-card-name">${escapeHtml(d.nombre)}</div>
-          <div class="file-card-meta"><span>${escapeHtml(d.categoria || '')}</span><span>${formatBytes(d.sizeBytes)}</span></div>
-        </div>`
-        )
-        .join('')}
-    </div>`;
-  } else {
-    el.innerHTML = `<div class="patient-directory">
-      ${docs
-        .map(
-          (d) => `
-        <div class="patient-directory-item${d.id === state.selectedId ? ' is-active' : ''}" data-doc-id="${d.id}">
-          <span class="file-type-icon">${d.tipo === 'imagen' && objectUrlFor(d) ? `<img src="${objectUrlFor(d)}" alt="" />` : icon(tipoIconFor(d), { size: 18 })}</span>
-          <div style="min-width:0;">
-            <div style="font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(d.nombre)}</div>
-            <div class="text-tertiary" style="font-size:11.5px;">${escapeHtml(d.categoria || '')} · ${formatDate(d.fecha, { withTime: true })}</div>
-          </div>
-        </div>`
-        )
-        .join('')}
-    </div>`;
-  }
-
-  el.querySelectorAll('[data-doc-id]').forEach((row) => {
-    row.addEventListener('click', () => {
-      state.selectedId = row.dataset.docId;
-      render();
+  container.querySelectorAll('[data-document-status]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const nextStatus = button.dataset.documentStatus;
+      if (nextStatus === state.estado) return;
+      state.estado = nextStatus;
+      state.selectedId = null;
+      syncDocumentStatusButtons();
+      await loadDocuments();
     });
   });
-}
 
-function renderViewer(doc) {
-  const viewerEl = document.getElementById('doc-viewer');
-  const infoEl = document.getElementById('doc-info');
-
-  if (!doc) {
-    viewerEl.innerHTML = cardHtml({ bodyHtml: '<div class="empty-state">Selecciona un archivo del listado.</div>' });
-    infoEl.innerHTML = '';
-    return;
-  }
-
-  const paciente = getById('pacientes', doc.pacienteId);
-  const url = objectUrlFor(doc);
-
-  let previewHtml;
-  if (doc.tipo === 'imagen' && url) {
-    previewHtml = `<div class="file-preview-placeholder" style="padding:0; height:320px;"><img src="${url}" alt="${escapeHtml(doc.nombre)}" style="max-width:100%; max-height:100%; object-fit:contain;" /></div>`;
-  } else if (doc.mimeType === 'application/pdf' && url) {
-    previewHtml = `<iframe class="file-preview-frame" src="${url}" title="${escapeHtml(doc.nombre)}"></iframe>`;
-  } else if (url) {
-    previewHtml = `<div class="file-preview-placeholder">${icon(tipoIconFor(doc), { size: 56 })}</div>
-      <div class="text-tertiary" style="font-size:11.5px; margin-top:8px; text-align:center;">Vista previa no disponible para este tipo de archivo. Descárgalo para verlo.</div>`;
-  } else {
-    previewHtml = `<div class="file-preview-placeholder">${icon(tipoIconFor(doc), { size: 56 })}</div>
-      <div class="text-tertiary" style="font-size:11.5px; margin-top:8px; text-align:center;">Vista previa simulada (dato de demostración sin archivo real)</div>`;
-  }
-
-  viewerEl.innerHTML = cardHtml({
-    title: doc.nombre,
-    headerClass: 'is-stacked',
-    actionsHtml: `
-      <button type="button" class="btn btn-secondary btn-sm" id="btn-descargar-doc">${icon('download', { size: 14 })} Descargar</button>
-      <button type="button" class="btn btn-secondary btn-sm" id="btn-editar-doc">${icon('edit', { size: 14 })} Editar</button>
-      <button type="button" class="btn btn-secondary btn-sm" id="btn-reemplazar-doc">${icon('refresh', { size: 14 })} Reemplazar</button>
-      <button type="button" class="btn btn-secondary btn-sm" id="btn-compartir-doc">${icon('share', { size: 14 })} Compartir</button>
-      <button type="button" class="btn btn-secondary btn-sm" id="btn-imprimir-doc">${icon('printer', { size: 14 })} Imprimir</button>
-      <button type="button" class="btn btn-danger btn-sm" id="btn-eliminar-doc">${icon('trash', { size: 14 })} Eliminar</button>
-    `,
-    bodyHtml: `
-      ${previewHtml}
-      <input type="file" id="replace-input" style="display:none;" />
-    `
-  });
-
-  infoEl.innerHTML = cardHtml({
-    title: 'Información y etiquetas',
-    bodyHtml: `
-      <div class="info-grid">
-        <div class="info-item"><div class="info-label">Paciente</div><div class="info-value">${paciente ? `${escapeHtml(paciente.nombre)} ${escapeHtml(paciente.apellidos)}` : 'No asociado'}</div></div>
-        <div class="info-item"><div class="info-label">Categoría</div><div class="info-value">${escapeHtml(doc.categoria)}</div></div>
-        <div class="info-item"><div class="info-label">Tamaño</div><div class="info-value">${formatBytes(doc.sizeBytes) !== '—' ? formatBytes(doc.sizeBytes) : escapeHtml(doc.tamano || '—')}</div></div>
-        <div class="info-item"><div class="info-label">Cargado por</div><div class="info-value">${escapeHtml(doc.uploadedBy || doc.fuente || '—')}</div></div>
-        <div class="info-item"><div class="info-label">Fecha</div><div class="info-value">${formatDate(doc.fecha, { withTime: true })}</div></div>
-        <div class="info-item"><div class="info-label">Tipo</div><div class="info-value">${escapeHtml(doc.mimeType || doc.modalidad || '—')}</div></div>
-      </div>
-      <hr class="divider" style="margin:14px 0;" />
-      <div class="info-item">
-        <div class="info-label">Descripción / Notas</div>
-        <div class="info-value">${escapeHtml(doc.descripcion || 'Sin descripción.')}</div>
-      </div>
-      <div class="info-item" style="margin-top:10px;">
-        <div class="info-label">Etiquetas</div>
-        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
-          ${(doc.tags || []).map((t) => `<span class="badge badge-primary">${escapeHtml(t)}</span>`).join('') || '<span class="text-tertiary">Sin etiquetas</span>'}
-        </div>
-      </div>
-    `
-  });
-
-  document.getElementById('btn-descargar-doc').addEventListener('click', () => {
-    if (!doc.blob) {
-      showToast({ message: 'Este archivo es un dato de demostración sin contenido real para descargar.', tone: 'warning' });
+  container.querySelector('#document-upload-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!state.pacienteId) {
+      showToast({ message: 'Selecciona primero el paciente del expediente.', tone: 'warning' });
       return;
     }
-    downloadBlob(doc.blob, doc.nombre);
-  });
+    const form = event.currentTarget;
+    const file = form.elements.file.files?.[0];
+    const status = container.querySelector('[data-role="upload-status"]');
+    const submit = form.querySelector('button[type="submit"]');
+    if (!file) {
+      status.textContent = 'Selecciona un archivo.';
+      return;
+    }
+    const validationMessage = validateFile(file);
+    if (validationMessage) {
+      status.textContent = validationMessage;
+      return;
+    }
 
-  document.getElementById('btn-editar-doc').addEventListener('click', () => openEditarModal(doc));
-
-  const replaceInput = document.getElementById('replace-input');
-  document.getElementById('btn-reemplazar-doc').addEventListener('click', () => replaceInput.click());
-  replaceInput.addEventListener('change', async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await update('documentos', doc.id, {
-      blob: file,
-      mimeType: file.type,
-      sizeBytes: file.size,
-      tamano: formatBytes(file.size),
-      tipo: file.type.startsWith('image/') ? 'imagen' : 'documento',
-      fecha: new Date().toISOString()
-    });
-    showToast({ message: 'Archivo reemplazado correctamente.', tone: 'success' });
-    render();
-  });
-
-  document.getElementById('btn-compartir-doc').addEventListener('click', async () => {
-    const shareUrl = `${window.location.origin}${window.location.pathname}#/documentos?doc=${doc.id}`;
+    submit.disabled = true;
+    status.textContent = 'Cargando y validando archivo…';
     try {
-      await navigator.clipboard.writeText(shareUrl);
-      showToast({ message: 'Enlace copiado al portapapeles.', tone: 'success' });
-    } catch {
-      showToast({ message: shareUrl, duration: 6000 });
+      const data = new FormData(form);
+      const documento = await uploadDocument({
+        pacienteId: state.pacienteId,
+        categoria: data.get('categoria'),
+        tags: data.get('tags'),
+        descripcion: data.get('descripcion'),
+      }, file);
+      form.reset();
+      state.estado = 'activo';
+      state.selectedId = documento.id;
+      syncDocumentStatusButtons();
+      await loadDocuments();
+      showToast({ message: 'Archivo cargado y registrado correctamente.', tone: 'success' });
+    } catch (error) {
+      status.textContent = userFacingApiError(error);
+    } finally {
+      submit.disabled = false;
     }
-  });
-
-  document.getElementById('btn-imprimir-doc').addEventListener('click', () => window.print());
-
-  document.getElementById('btn-eliminar-doc').addEventListener('click', async () => {
-    if (!confirm(`¿Eliminar "${doc.nombre}"? Esta acción solo afecta los datos locales de la demo.`)) return;
-    const cached = objectUrls.get(doc.id);
-    if (cached) {
-      URL.revokeObjectURL(cached.url);
-      objectUrls.delete(doc.id);
-    }
-    await remove('documentos', doc.id);
-    state.selectedId = null;
-    render();
   });
 }
 
-function openEditarModal(doc) {
-  const bodyHtml = `
-    <form id="form-editar-doc" class="form-grid">
-      ${textField({ name: 'nombre', label: 'Nombre del archivo', value: doc.nombre, required: true, span2: true })}
-      ${selectField({ name: 'categoria', label: 'Categoría', value: doc.categoria, options: CATEGORIAS })}
-      ${textField({ name: 'tags', label: 'Etiquetas (separadas por coma)', value: (doc.tags || []).join(', '), span2: true })}
-      ${textareaField({ name: 'descripcion', label: 'Descripción', value: doc.descripcion || '', span2: true, rows: 3 })}
-    </form>
-  `;
+async function refreshPatientOptions(searchTerm) {
+  const requestId = ++patientSearchRequest;
+  const selectedPatient = patients.find((patient) => patient.id === state.pacienteId);
+  try {
+    const q = searchTerm.trim();
+    const results = await getAll('pacientes', {
+      page: 1,
+      limit: q ? 50 : 100,
+      estado: 'activo',
+      q: q || undefined,
+    });
+    if (requestId !== patientSearchRequest || !container) return;
+    patients = selectedPatient && !results.some((patient) => patient.id === selectedPatient.id)
+      ? [selectedPatient, ...results]
+      : results;
+    const selector = container.querySelector('#document-patient');
+    selector.innerHTML = patientOptions();
+    selector.value = state.pacienteId;
+  } catch (error) {
+    if (requestId === patientSearchRequest) {
+      showToast({ message: userFacingApiError(error), tone: 'danger' });
+    }
+  }
+}
 
-  openModal({
-    title: 'Editar archivo',
-    bodyHtml,
-    footerHtml: `
-      <button type="button" class="btn btn-secondary" id="modal-cancel">Cancelar</button>
-      <button type="button" class="btn btn-primary" id="modal-save">Guardar cambios</button>
-    `,
-    onMount: (modalEl, close) => {
-      modalEl.querySelector('#modal-cancel').addEventListener('click', close);
-      modalEl.querySelector('#modal-save').addEventListener('click', async () => {
-        const form = modalEl.querySelector('#form-editar-doc');
-        if (!validateRequired(form)) return;
-        const data = getFormData(form);
-        await update('documentos', doc.id, {
-          nombre: data.nombre,
-          categoria: data.categoria,
-          descripcion: data.descripcion || '',
-          tags: data.tags ? data.tags.split(',').map((t) => t.trim()).filter(Boolean) : []
-        });
-        close();
-        showToast({ message: 'Archivo actualizado.', tone: 'success' });
-        render();
+function validateFile(file) {
+  if (file.size > MAX_UPLOAD_BYTES) return 'El archivo supera el máximo permitido de 10 MB.';
+  const extension = file.name.split('.').pop()?.toLocaleLowerCase();
+  if (!extension || !ALLOWED_EXTENSIONS.has(extension)) {
+    return 'Selecciona un PDF, imagen o documento ofimático permitido.';
+  }
+  return '';
+}
+
+function syncDocumentStatusButtons() {
+  container.querySelectorAll('[data-document-status]').forEach((button) => {
+    const isActive = button.dataset.documentStatus === state.estado;
+    button.classList.toggle('btn-primary', isActive);
+    button.classList.toggle('btn-secondary', !isActive);
+  });
+}
+
+async function loadDocuments() {
+  const list = container.querySelector('#document-list');
+  const detail = container.querySelector('#document-detail');
+  if (!state.pacienteId) {
+    state.documentos = [];
+    list.innerHTML = "<div class='empty-state'>Selecciona un paciente para ver sus archivos.</div>";
+    detail.innerHTML = '';
+    return;
+  }
+
+  list.innerHTML = "<div class='loading-state'>Cargando documentos…</div>";
+  try {
+    state.documentos = await getAll('documentos', { pacienteId: state.pacienteId, estado: state.estado });
+    if (!state.documentos.some((documento) => documento.id === state.selectedId)) {
+      state.selectedId = state.documentos[0]?.id || null;
+    }
+    renderDocuments();
+  } catch (error) {
+    list.innerHTML = "<div class='empty-state' role='alert'>" + escapeHtml(userFacingApiError(error)) + '</div>';
+    detail.innerHTML = '';
+  }
+}
+
+function renderDocuments() {
+  const list = container.querySelector('#document-list');
+  const detail = container.querySelector('#document-detail');
+  if (!state.documentos.length) {
+    const message = state.estado === 'eliminado'
+      ? 'No hay documentos archivados para este expediente.'
+      : 'Este expediente todavía no tiene documentos activos.';
+    list.innerHTML = "<div class='empty-state'>" + message + '</div>';
+    detail.innerHTML = '';
+    return;
+  }
+
+  list.innerHTML = [
+    "<div class='section-header' style='padding-bottom:10px;'><strong>" + (state.estado === 'eliminado' ? 'Archivados' : 'Documentos activos') + ' (' + state.documentos.length + ")</strong><span class='badge " + (state.estado === 'eliminado' ? 'badge-warning' : 'badge-success') + "'>" + (state.estado === 'eliminado' ? 'Retenidos' : 'Disponibles') + '</span></div>',
+    "<div class='patient-directory'>",
+    state.documentos.map((documento) => {
+      const selected = documento.id === state.selectedId ? ' is-active' : '';
+      const iconName = documento.tipo === 'imagen' ? 'image' : 'file-text';
+      return [
+        "<button type='button' class='patient-directory-item" + selected + "' data-document-id='" + escapeHtml(documento.id) + "' style='width:100%; text-align:left; border:0;'>",
+        "  <span class='file-type-icon'>" + icon(iconName, { size: 18 }) + '</span>',
+        "  <span style='min-width:0; flex:1;'><strong style='display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;'>" + escapeHtml(documento.nombre) + "</strong><small class='text-tertiary'>" + escapeHtml(documento.categoria) + ' · ' + escapeHtml(documento.tamano || formatBytes(documento.sizeBytes)) + '</small></span>',
+        '</button>',
+      ].join('');
+    }).join(''),
+    '</div>',
+  ].join('');
+
+  list.querySelectorAll('[data-document-id]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.selectedId = button.dataset.documentId;
+      renderDocuments();
+    });
+  });
+
+  renderDetail(detail, state.documentos.find((documento) => documento.id === state.selectedId));
+}
+
+function renderDetail(detail, documento) {
+  if (!documento) {
+    detail.innerHTML = '';
+    return;
+  }
+  const categoryOptions = CATEGORIAS.map((category) => {
+    const selected = category === documento.categoria ? " selected" : "";
+    return "<option value='" + escapeHtml(category) + "'" + selected + '>' + escapeHtml(category) + '</option>';
+  }).join('');
+  const size = documento.tamano || formatBytes(documento.sizeBytes);
+  const isArchived = documento.estado === 'eliminado';
+  const actionsHtml = isArchived
+    ? "<button type='button' class='btn btn-primary btn-sm' data-action='restore-document'>" + icon('refresh', { size: 14 }) + ' Restaurar</button>'
+    : "<button type='button' class='btn btn-secondary btn-sm' data-action='download-document'>" + icon('download', { size: 14 }) + " Descargar</button><button type='button' class='btn btn-danger btn-sm' data-action='delete-document'>" + icon('trash', { size: 14 }) + ' Eliminar</button>';
+  const editorHtml = isArchived
+    ? "<div class='empty-state' style='margin-top:16px; padding:14px; text-align:left;'>Este archivo está archivado para trazabilidad. Restáuralo para descargarlo o modificar sus metadatos.</div>"
+    : [
+      "<form id='document-edit-form' class='form-grid' style='margin-top:16px;'>",
+      "<label class='form-field'>Categoría<select class='form-input' name='categoria'>" + categoryOptions + '</select></label>',
+      "<label class='form-field'>Etiquetas<input class='form-input' name='tags' maxlength='300' value='" + escapeHtml((documento.tags || []).join(', ')) + "' /></label>",
+      "<label class='form-field span-2'>Descripción<textarea class='form-input' name='descripcion' rows='3' maxlength='2000'>" + escapeHtml(documento.descripcion || '') + '</textarea></label>',
+      "<div class='span-2'><button class='btn btn-secondary' type='submit'>Guardar metadatos</button><span class='text-tertiary' data-role='edit-status' style='margin-left:8px; font-size:12px;'></span></div>",
+      '</form>',
+    ].join('');
+
+  detail.innerHTML = cardHtml({
+    title: escapeHtml(documento.nombre),
+    actionsHtml,
+    bodyHtml: [
+      "<div class='info-grid'>",
+      "<div class='info-item'><div class='info-label'>Categoría</div><div class='info-value'>" + escapeHtml(documento.categoria) + '</div></div>',
+      "<div class='info-item'><div class='info-label'>Tamaño</div><div class='info-value'>" + escapeHtml(size || '—') + '</div></div>',
+      "<div class='info-item'><div class='info-label'>Tipo</div><div class='info-value'>" + escapeHtml(documento.mimeType || documento.tipo) + '</div></div>',
+      "<div class='info-item'><div class='info-label'>Fecha</div><div class='info-value'>" + escapeHtml(formatDate(documento.fecha, { withTime: true })) + '</div></div>',
+      "<div class='info-item'><div class='info-label'>Estado</div><div class='info-value'>" + (isArchived ? 'Archivado' : 'Activo') + '</div></div>',
+      '</div>',
+      editorHtml,
+    ].join(''),
+  });
+
+  detail.querySelector('[data-action="download-document"]')?.addEventListener('click', async () => {
+    try {
+      const { blob } = await downloadDocument(documento.id);
+      downloadBlob(blob, documento.nombre);
+    } catch (error) {
+      showToast({ message: userFacingApiError(error), tone: 'danger' });
+    }
+  });
+
+  detail.querySelector('[data-action="delete-document"]')?.addEventListener('click', async () => {
+    if (!window.confirm('¿Dar de baja este documento? Se conservará para la trazabilidad administrativa.')) return;
+    try {
+      await remove('documentos', documento.id);
+      state.estado = 'eliminado';
+      state.selectedId = documento.id;
+      syncDocumentStatusButtons();
+      await loadDocuments();
+      showToast({ message: 'Documento archivado. Puedes restaurarlo cuando sea necesario.', tone: 'success' });
+    } catch (error) {
+      showToast({ message: userFacingApiError(error), tone: 'danger' });
+    }
+  });
+
+  detail.querySelector('[data-action="restore-document"]')?.addEventListener('click', async () => {
+    try {
+      const restored = await restoreDocument(documento.id);
+      state.estado = 'activo';
+      state.selectedId = restored.id;
+      syncDocumentStatusButtons();
+      await loadDocuments();
+      showToast({ message: 'Documento restaurado y disponible nuevamente.', tone: 'success' });
+    } catch (error) {
+      showToast({ message: userFacingApiError(error), tone: 'danger' });
+    }
+  });
+
+  detail.querySelector('#document-edit-form')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const status = form.querySelector('[data-role="edit-status"]');
+    const data = new FormData(form);
+    try {
+      status.textContent = 'Guardando…';
+      await update('documentos', documento.id, {
+        categoria: data.get('categoria'),
+        tags: String(data.get('tags') || '').split(',').map((tag) => tag.trim()).filter(Boolean),
+        descripcion: data.get('descripcion'),
       });
+      await loadDocuments();
+      showToast({ message: 'Metadatos actualizados.', tone: 'success' });
+    } catch (error) {
+      status.textContent = userFacingApiError(error);
     }
   });
 }
 
 export function unmount() {
-  cleanupFns.forEach((fn) => fn());
-  cleanupFns = [];
-  revokeAllObjectUrls();
-  uploadQueue = [];
+  window.clearTimeout(patientSearchTimer);
+  container = null;
+  patients = [];
+  state = { pacienteId: '', documentos: [], selectedId: null, estado: 'activo' };
+  patientContextMessage = '';
+  patientSearchTimer = null;
+  patientSearchRequest = 0;
 }

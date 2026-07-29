@@ -87,6 +87,45 @@ describe('Pacientes (e2e)', () => {
     expect(response.body.items[0].nombre).toBe('Inactivo');
   });
 
+  it('crea un paciente con el contrato público y rechaza campos fuera de contrato', async () => {
+    const rol = await createRoleWithPermissions(dataSource, 'GESTOR_PACIENTES', ['pacientes:leer', 'pacientes:escribir']);
+    const { email, password } = await createUsuario(dataSource, { rol });
+    const token = await login(app, email, password);
+    const payload = {
+      nombre: 'Heber',
+      apellidos: 'Alvarado',
+      fechaNacimiento: '2000-07-10',
+      sexo: 'Masculino',
+      estadoCivil: 'Soltero(a)',
+      grupoSanguineo: 'O+',
+      contacto: { email: 'main@example.test', telefono: '87907728' },
+      alergias: [],
+      alertas: [],
+    };
+
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/pacientes')
+      .set('Authorization', `Bearer ${token}`)
+      .send(payload)
+      .expect(201);
+    expect(created.body).toEqual(expect.objectContaining({
+      nombre: 'Heber',
+      apellidos: 'Alvarado',
+      estado: 'activo',
+    }));
+
+    await request(app.getHttpServer())
+      .get(`/api/v1/pacientes/${created.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/pacientes')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ ...payload, referencias: [] })
+      .expect(400);
+  });
+
   it('rechaza el acceso sin token con 401', async () => {
     await request(app.getHttpServer())
       .get('/api/v1/pacientes')

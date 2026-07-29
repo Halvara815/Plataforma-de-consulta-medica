@@ -1,10 +1,16 @@
-import { getLocal, setLocal } from '../../utils.js';
-import { escapeHtml, formatDate } from '../../utils.js';
+import { showToast } from '../../components/toast.js';
 import { icon } from '../../icons.js';
+import { escapeHtml, formatDate } from '../../utils.js';
+import { loadPreferences, updatePreferences } from '../../services/preferencesService.js';
 
-const STORAGE_KEY = 'herramientas_agenda_personal';
+function newId(prefix) {
+  return globalThis.crypto?.randomUUID?.() || `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
-export function render(panelEl) {
+export async function render(panelEl) {
+  const preferences = await loadPreferences();
+  let recordatorios = [...preferences.recordatorios];
+
   panelEl.innerHTML = `
     <div class="card">
       <div class="card-header"><h2>Nuevo recordatorio personal</h2></div>
@@ -34,48 +40,59 @@ export function render(panelEl) {
   const listEl = panelEl.querySelector('#ag-list');
   fechaInput.value = new Date().toISOString().slice(0, 10);
 
+  async function save(next) {
+    const previous = recordatorios;
+    recordatorios = next;
+    draw();
+    try {
+      recordatorios = (await updatePreferences({ recordatorios })).recordatorios;
+      draw();
+      return true;
+    } catch {
+      recordatorios = previous;
+      draw();
+      showToast({ message: 'No se pudo sincronizar el recordatorio.', tone: 'warning' });
+      return false;
+    }
+  }
+
   function draw() {
-    const items = [...getLocal(STORAGE_KEY, [])].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    const items = [...recordatorios].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
     listEl.innerHTML = items.length
       ? items
           .map(
-            (r) => `
+            (recordatorio) => `
         <div style="display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--border-color);">
-          <input type="checkbox" data-toggle="${r.id}" ${r.done ? 'checked' : ''} />
-          <div style="flex:1; ${r.done ? 'text-decoration:line-through; color:var(--text-tertiary);' : ''}">
-            <div style="font-size:13px; font-weight:600;">${escapeHtml(r.titulo)}</div>
-            <div class="text-tertiary" style="font-size:11.5px;">${formatDate(r.fecha)}</div>
+          <input type="checkbox" data-toggle="${recordatorio.id}" ${recordatorio.done ? 'checked' : ''} />
+          <div style="flex:1; ${recordatorio.done ? 'text-decoration:line-through; color:var(--text-tertiary);' : ''}">
+            <div style="font-size:13px; font-weight:600;">${escapeHtml(recordatorio.titulo)}</div>
+            <div class="text-tertiary" style="font-size:11.5px;">${formatDate(recordatorio.fecha)}</div>
           </div>
-          <button type="button" class="btn btn-ghost btn-sm" data-remove="${r.id}">${icon('trash', { size: 14 })}</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-remove="${recordatorio.id}">${icon('trash', { size: 14 })}</button>
         </div>`
           )
           .join('')
       : '<div class="empty-state">Sin recordatorios pendientes.</div>';
 
-    listEl.querySelectorAll('[data-toggle]').forEach((el) => {
-      el.addEventListener('change', () => {
-        const id = Number(el.dataset.toggle);
-        const items = getLocal(STORAGE_KEY, []).map((r) => (r.id === id ? { ...r, done: el.checked } : r));
-        setLocal(STORAGE_KEY, items);
-        draw();
+    listEl.querySelectorAll('[data-toggle]').forEach((input) => {
+      input.addEventListener('change', () => {
+        const id = input.dataset.toggle;
+        void save(recordatorios.map((recordatorio) => (recordatorio.id === id ? { ...recordatorio, done: input.checked } : recordatorio)));
       });
     });
-    listEl.querySelectorAll('[data-remove]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const id = Number(btn.dataset.remove);
-        setLocal(STORAGE_KEY, getLocal(STORAGE_KEY, []).filter((r) => r.id !== id));
-        draw();
-      });
+    listEl.querySelectorAll('[data-remove]').forEach((button) => {
+      button.addEventListener('click', () => void save(recordatorios.filter((recordatorio) => recordatorio.id !== button.dataset.remove)));
     });
   }
 
-  panelEl.querySelector('#ag-guardar').addEventListener('click', () => {
-    if (!tituloInput.value.trim()) return;
-    const items = getLocal(STORAGE_KEY, []);
-    items.push({ id: Date.now(), titulo: tituloInput.value.trim(), fecha: fechaInput.value, done: false });
-    setLocal(STORAGE_KEY, items);
-    tituloInput.value = '';
-    draw();
+  panelEl.querySelector('#ag-guardar').addEventListener('click', async () => {
+    const titulo = tituloInput.value.trim();
+    if (!titulo || !fechaInput.value) return;
+    const saved = await save([
+      ...recordatorios,
+      { id: newId('recordatorio'), titulo, fecha: fechaInput.value, done: false },
+    ]);
+    if (saved) tituloInput.value = '';
   });
 
   draw();

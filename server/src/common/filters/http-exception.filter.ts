@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { MulterError } from 'multer';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -18,14 +19,20 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request>();
 
     const status =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
+      exception instanceof MulterError
+        ? HttpStatus.BAD_REQUEST
+        : exception instanceof HttpException
+          ? exception.getStatus()
+          : HttpStatus.INTERNAL_SERVER_ERROR;
 
     const exceptionResponse =
-      exception instanceof HttpException
-        ? exception.getResponse()
-        : 'Internal server error';
+      exception instanceof MulterError
+        ? exception.code === 'LIMIT_FILE_SIZE'
+          ? 'El archivo supera el tamaño máximo permitido'
+          : 'El archivo adjunto no es válido'
+        : exception instanceof HttpException
+          ? exception.getResponse()
+          : 'Internal server error';
 
     const message = typeof exceptionResponse === 'string'
       ? exceptionResponse

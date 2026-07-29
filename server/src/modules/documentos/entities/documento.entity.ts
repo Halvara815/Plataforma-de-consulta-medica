@@ -1,7 +1,8 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, UpdateDateColumn } from 'typeorm';
 import { Paciente } from '../../pacientes/entities/paciente.entity';
 
 @Entity('documentos')
+@Index(['pacienteId', 'estado', 'fecha'])
 export class Documento {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -42,4 +43,37 @@ export class Documento {
 
   @Column({ nullable: true })
   tamano: string;
+
+  @Column({ nullable: true, select: false })
+  storageKey: string | null;
+
+  @Column({ nullable: true })
+  mimeType: string | null;
+
+  @Column({ type: 'integer', nullable: true })
+  sizeBytes: number | null;
+
+  @Column({ nullable: true, select: false })
+  checksum: string | null;
+
+  @Column({ nullable: true })
+  scanStatus: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  scannedAt: Date | null;
+
+  @Column({ default: 'activo' })
+  estado: 'activo' | 'eliminado';
+
+  @Column({ type: 'timestamptz', nullable: true })
+  deletedAt: Date | null;
+
+  @Column({ nullable: true })
+  deletedBy: string | null;
+
+  @CreateDateColumn({ type: 'timestamptz' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ type: 'timestamptz' })
+  updatedAt: Date;
 }

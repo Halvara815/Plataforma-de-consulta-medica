@@ -7,6 +7,7 @@ const routes = [
   { path: '/dashboard', name: 'dashboard', loader: () => import('./modules/dashboard.js') },
   { path: '/pacientes', name: 'pacientes', loader: () => import('./modules/pacientes.js') },
   { path: '/pacientes/:id', name: 'pacientes', loader: () => import('./modules/pacientes.js') },
+  { path: '/historia-clinica', name: 'historiaClinica', loader: () => import('./modules/historiaClinica.js') },
   { path: '/historia-clinica/:id', name: 'historiaClinica', loader: () => import('./modules/historiaClinica.js') },
   { path: '/consulta/:id', name: 'consulta', loader: () => import('./modules/consulta.js') },
   { path: '/agenda', name: 'agenda', loader: () => import('./modules/agenda.js') },

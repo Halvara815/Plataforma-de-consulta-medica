@@ -1,11 +1,10 @@
-import { getLocal, setLocal } from '../../utils.js';
+import { showToast } from '../../components/toast.js';
 import { icon } from '../../icons.js';
 import { downloadBlob } from '../../utils.js';
-import { showToast } from '../../components/toast.js';
+import { downloadSignature, removeSignature, uploadSignature } from '../../services/dataService.js';
+import { loadSignatures } from '../../services/preferencesService.js';
 
-const STORAGE_KEY = 'herramientas_firmas';
-
-export function render(panelEl) {
+export async function render(panelEl) {
   panelEl.innerHTML = `
     <div class="card">
       <div class="card-header"><h2>Firma digital</h2></div>
@@ -27,6 +26,8 @@ export function render(panelEl) {
   const canvas = panelEl.querySelector('#signature-canvas');
   const ctx = canvas.getContext('2d');
   const galleryEl = panelEl.querySelector('#sig-gallery');
+  const saveButton = panelEl.querySelector('#sig-save');
+  let galleryUrls = [];
 
   function resizeCanvas() {
     const rect = canvas.getBoundingClientRect();
@@ -41,24 +42,24 @@ export function render(panelEl) {
 
   let drawing = false;
 
-  function pos(e) {
+  function pos(event) {
     const rect = canvas.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
 
-  canvas.addEventListener('pointerdown', (e) => {
+  canvas.addEventListener('pointerdown', (event) => {
     drawing = true;
-    const p = pos(e);
+    const point = pos(event);
     ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
+    ctx.moveTo(point.x, point.y);
   });
-  canvas.addEventListener('pointermove', (e) => {
+  canvas.addEventListener('pointermove', (event) => {
     if (!drawing) return;
-    const p = pos(e);
-    ctx.lineTo(p.x, p.y);
+    const point = pos(event);
+    ctx.lineTo(point.x, point.y);
     ctx.stroke();
   });
-  ['pointerup', 'pointerleave'].forEach((evt) => canvas.addEventListener(evt, () => (drawing = false)));
+  ['pointerup', 'pointerleave'].forEach((eventName) => canvas.addEventListener(eventName, () => (drawing = false)));
 
   panelEl.querySelector('#sig-clear').addEventListener('click', () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -67,39 +68,72 @@ export function render(panelEl) {
   panelEl.querySelector('#sig-download').addEventListener('click', () => {
     canvas.toBlob((blob) => {
       if (blob) downloadBlob(blob, `firma-${Date.now()}.png`);
-    });
+    }, 'image/png');
   });
 
-  panelEl.querySelector('#sig-save').addEventListener('click', () => {
-    const dataUrl = canvas.toDataURL('image/png');
-    const nuevas = [{ id: Date.now(), dataUrl }, ...getLocal(STORAGE_KEY, [])].slice(0, 12);
-    setLocal(STORAGE_KEY, nuevas);
-    renderGallery();
-    showToast({ message: 'Firma guardada en la galería local.', tone: 'success' });
-  });
+  async function renderGallery() {
+    galleryUrls.forEach((url) => URL.revokeObjectURL(url));
+    galleryUrls = [];
+    galleryEl.innerHTML = '<div class="empty-state">Cargando firmas…</div>';
+    try {
+      const firmas = await loadSignatures();
+      const gallery = await Promise.all(firmas.map(async (firma) => {
+        const { blob } = await downloadSignature(firma.id);
+        const url = URL.createObjectURL(blob);
+        galleryUrls.push(url);
+        return { ...firma, url };
+      }));
+      galleryEl.innerHTML = gallery.length
+        ? gallery.map((firma) => `
+          <div class="tool-card" style="flex-direction:column; align-items:stretch; gap:8px;">
+            <img src="${firma.url}" alt="Firma guardada" style="width:100%; background:#fff; border-radius:var(--radius-sm);" />
+            <button type="button" class="btn btn-secondary btn-sm" data-download-firma="${firma.id}">${icon('download', { size: 13 })} Descargar</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-remove-firma="${firma.id}">${icon('trash', { size: 13 })} Eliminar</button>
+          </div>`).join('')
+        : '<div class="empty-state">Sin firmas guardadas.</div>';
 
-  function renderGallery() {
-    const items = getLocal(STORAGE_KEY, []);
-    galleryEl.innerHTML = items.length
-      ? items
-          .map(
-            (f) => `
-        <div class="tool-card" style="flex-direction:column; align-items:stretch; gap:8px;">
-          <img src="${f.dataUrl}" alt="Firma guardada" style="width:100%; background:#fff; border-radius:var(--radius-sm);" />
-          <button type="button" class="btn btn-ghost btn-sm" data-remove-firma="${f.id}">${icon('trash', { size: 13 })} Eliminar</button>
-        </div>`
-          )
-          .join('')
-      : '<div class="empty-state">Sin firmas guardadas.</div>';
-
-    galleryEl.querySelectorAll('[data-remove-firma]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const id = Number(btn.dataset.removeFirma);
-        setLocal(STORAGE_KEY, getLocal(STORAGE_KEY, []).filter((f) => f.id !== id));
-        renderGallery();
+      galleryEl.querySelectorAll('[data-download-firma]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          try {
+            const { blob } = await downloadSignature(button.dataset.downloadFirma);
+            downloadBlob(blob, `firma-${Date.now()}.png`);
+          } catch {
+            showToast({ message: 'No se pudo descargar la firma.', tone: 'warning' });
+          }
+        });
       });
-    });
+      galleryEl.querySelectorAll('[data-remove-firma]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          try {
+            await removeSignature(button.dataset.removeFirma);
+            await renderGallery();
+          } catch {
+            showToast({ message: 'No se pudo eliminar la firma.', tone: 'warning' });
+          }
+        });
+      });
+    } catch {
+      galleryEl.innerHTML = '<div class="empty-state">No se pudieron cargar las firmas.</div>';
+    }
   }
 
-  renderGallery();
+  saveButton.addEventListener('click', () => {
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+      saveButton.disabled = true;
+      try {
+        const file = new File([blob], `firma-${Date.now()}.png`, { type: 'image/png' });
+        await uploadSignature(file);
+        await renderGallery();
+        showToast({ message: 'Firma guardada y sincronizada.', tone: 'success' });
+      } catch {
+        showToast({ message: 'No se pudo guardar la firma.', tone: 'warning' });
+      } finally {
+        saveButton.disabled = false;
+      }
+    }, 'image/png');
+  });
+
+  await renderGallery();
+  return () => galleryUrls.forEach((url) => URL.revokeObjectURL(url));
 }

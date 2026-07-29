@@ -1,9 +1,9 @@
-import { getLocal, setLocal } from './utils.js';
+import { getPreferencesSnapshot, loadPreferences, updatePreferences } from './services/preferencesService.js';
 
-const THEME_KEY = 'theme';
+let currentTheme = 'system';
 
 export function getTheme() {
-  return getLocal(THEME_KEY, 'system');
+  return currentTheme;
 }
 
 export function applyTheme(theme) {
@@ -15,21 +15,38 @@ export function applyTheme(theme) {
   }
 }
 
-export function setTheme(theme) {
-  setLocal(THEME_KEY, theme);
+export async function setTheme(theme) {
+  if (!['light', 'dark', 'system'].includes(theme)) return currentTheme;
+  const previousTheme = currentTheme;
+  currentTheme = theme;
   applyTheme(theme);
+  try {
+    await updatePreferences({ tema: theme });
+    return currentTheme;
+  } catch (error) {
+    currentTheme = previousTheme;
+    applyTheme(previousTheme);
+    throw error;
+  }
 }
 
-export function toggleTheme() {
+export async function toggleTheme() {
   const current = getTheme();
   const effectiveDark =
     current === 'dark' ||
     (current === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const next = effectiveDark ? 'light' : 'dark';
-  setTheme(next);
-  return next;
+  return setTheme(next);
 }
 
 export function initTheme() {
-  applyTheme(getTheme());
+  currentTheme = getPreferencesSnapshot().tema;
+  applyTheme(currentTheme);
+}
+
+export async function loadThemePreference() {
+  const preferences = await loadPreferences();
+  currentTheme = preferences.tema;
+  applyTheme(currentTheme);
+  return currentTheme;
 }

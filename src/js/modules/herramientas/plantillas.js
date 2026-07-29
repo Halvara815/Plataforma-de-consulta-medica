@@ -1,17 +1,16 @@
-import { getLocal, setLocal } from '../../utils.js';
-import { escapeHtml } from '../../utils.js';
-import { icon } from '../../icons.js';
 import { showToast } from '../../components/toast.js';
+import { icon } from '../../icons.js';
+import { escapeHtml } from '../../utils.js';
+import { loadPreferences, updatePreferences } from '../../services/preferencesService.js';
 
-const STORAGE_KEY = 'herramientas_plantillas';
+function newId(prefix) {
+  return globalThis.crypto?.randomUUID?.() || `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
-const DEFAULTS = [
-  { id: 1, titulo: 'Nota de evolución', cuerpo: 'Paciente acude a seguimiento. Refiere...\n\nExploración física: ...\n\nPlan: ...' },
-  { id: 2, titulo: 'Consentimiento informado', cuerpo: 'El paciente ha sido informado de los riesgos, beneficios y alternativas del procedimiento propuesto y otorga su consentimiento de forma voluntaria.' },
-  { id: 3, titulo: 'Indicaciones generales', cuerpo: 'Reposo relativo, abundantes líquidos, dieta blanda. Acudir a revisión en caso de fiebre, dolor intenso o datos de alarma.' }
-];
+export async function render(panelEl) {
+  const preferences = await loadPreferences();
+  let plantillas = [...preferences.plantillas];
 
-export function render(panelEl) {
   panelEl.innerHTML = `
     <div class="card">
       <div class="card-header"><h2>Nueva plantilla</h2></div>
@@ -37,58 +36,67 @@ export function render(panelEl) {
   const cuerpoInput = panelEl.querySelector('#pl-cuerpo');
   const listEl = panelEl.querySelector('#pl-list');
 
-  function getPlantillas() {
-    const stored = getLocal(STORAGE_KEY, null);
-    return stored || DEFAULTS;
+  async function save(next) {
+    const previous = plantillas;
+    plantillas = next;
+    draw();
+    try {
+      plantillas = (await updatePreferences({ plantillas })).plantillas;
+      draw();
+      return true;
+    } catch {
+      plantillas = previous;
+      draw();
+      showToast({ message: 'No se pudo sincronizar la plantilla.', tone: 'warning' });
+      return false;
+    }
   }
 
   function draw() {
-    const plantillas = getPlantillas();
     listEl.innerHTML = plantillas.length
       ? plantillas
           .map(
-            (p) => `
+            (plantilla) => `
         <div class="tool-card">
           <div style="min-width:0; flex:1;">
-            <strong style="font-size:13px;">${escapeHtml(p.titulo)}</strong>
-            <p style="font-size:12.5px; white-space:pre-wrap; color:var(--text-secondary); margin-top:4px;">${escapeHtml(p.cuerpo)}</p>
+            <strong style="font-size:13px;">${escapeHtml(plantilla.titulo)}</strong>
+            <p style="font-size:12.5px; white-space:pre-wrap; color:var(--text-secondary); margin-top:4px;">${escapeHtml(plantilla.cuerpo)}</p>
           </div>
           <div style="display:flex; flex-direction:column; gap:6px;">
-            <button type="button" class="btn btn-secondary btn-sm" data-copy="${p.id}">${icon('copy', { size: 13 })} Copiar</button>
-            <button type="button" class="btn btn-ghost btn-sm" data-remove="${p.id}">${icon('trash', { size: 13 })}</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-copy="${plantilla.id}">${icon('copy', { size: 13 })} Copiar</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-remove="${plantilla.id}">${icon('trash', { size: 13 })}</button>
           </div>
         </div>`
           )
           .join('')
       : '<div class="empty-state">Sin plantillas guardadas.</div>';
 
-    listEl.querySelectorAll('[data-copy]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const p = getPlantillas().find((t) => t.id === Number(btn.dataset.copy));
+    listEl.querySelectorAll('[data-copy]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const plantilla = plantillas.find((item) => item.id === button.dataset.copy);
+        if (!plantilla) return;
         try {
-          await navigator.clipboard.writeText(p.cuerpo);
+          await navigator.clipboard.writeText(plantilla.cuerpo);
           showToast({ message: 'Plantilla copiada al portapapeles.', tone: 'success' });
         } catch {
           showToast({ message: 'No se pudo copiar automáticamente.', tone: 'warning' });
         }
       });
     });
-    listEl.querySelectorAll('[data-remove]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const id = Number(btn.dataset.remove);
-        setLocal(STORAGE_KEY, getPlantillas().filter((p) => p.id !== id));
-        draw();
-      });
+    listEl.querySelectorAll('[data-remove]').forEach((button) => {
+      button.addEventListener('click', () => void save(plantillas.filter((plantilla) => plantilla.id !== button.dataset.remove)));
     });
   }
 
-  panelEl.querySelector('#pl-guardar').addEventListener('click', () => {
-    if (!tituloInput.value.trim()) return;
-    const plantillas = [...getPlantillas(), { id: Date.now(), titulo: tituloInput.value.trim(), cuerpo: cuerpoInput.value.trim() }];
-    setLocal(STORAGE_KEY, plantillas);
-    tituloInput.value = '';
-    cuerpoInput.value = '';
-    draw();
+  panelEl.querySelector('#pl-guardar').addEventListener('click', async () => {
+    const titulo = tituloInput.value.trim();
+    const cuerpo = cuerpoInput.value.trim();
+    if (!titulo || !cuerpo) return;
+    const saved = await save([...plantillas, { id: newId('plantilla'), titulo, cuerpo }]);
+    if (saved) {
+      tituloInput.value = '';
+      cuerpoInput.value = '';
+    }
   });
 
   draw();

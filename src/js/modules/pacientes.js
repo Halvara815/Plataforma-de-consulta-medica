@@ -1,4 +1,4 @@
-import { getAll, getById, getCatalogos, getPage, create, query as queryCollection } from '../services/dataService.js';
+import { getAll, getById, getCatalogos, getPage, create, query as queryCollection, userFacingApiError } from '../services/dataService.js';
 import { setTopbarTitle } from '../components/topbar.js';
 import { cardHtml } from '../components/card.js';
 import { createSectionNav } from '../components/sectionNav.js';
@@ -7,6 +7,7 @@ import { textField, selectField, getFormData, validateRequired } from '../compon
 import { navigateTo } from '../router.js';
 import { calcAge, escapeHtml, formatDate, initials } from '../utils.js';
 import { icon } from '../icons.js';
+import { showToast } from '../components/toast.js';
 
 import * as pacienteDashboard from './paciente/dashboard.js';
 import * as pacienteDatosGenerales from './paciente/datosGenerales.js';
@@ -240,21 +241,26 @@ async function renderTimeline(paciente) {
     return;
   }
 
-  const consultasFetch = await queryCollection('consultas', null, { pacienteId: paciente.id });
+  const [consultasResult, recetasResult, documentosResult] = await Promise.allSettled([
+    queryCollection('consultas', null, { pacienteId: paciente.id }),
+    queryCollection('recetas', null, { pacienteId: paciente.id }),
+    queryCollection('documentos', null, { pacienteId: paciente.id }),
+  ]);
+  const consultasFetch = consultasResult.status === 'fulfilled' ? consultasResult.value : [];
   const consultas = consultasFetch.map((c) => ({
     date: c.fecha,
     label: `Consulta: ${c.motivoConsulta}`,
     badge: 'Consulta',
     tone: 'badge-primary'
   }));
-  const recetasFetch = await queryCollection('recetas', null, { pacienteId: paciente.id });
+  const recetasFetch = recetasResult.status === 'fulfilled' ? recetasResult.value : [];
   const recetas = recetasFetch.map((r) => ({
     date: r.fecha,
     label: `Receta ${r.folio}`,
     badge: 'Prescripción',
     tone: 'badge-accent'
   }));
-  const documentosFetch = await queryCollection('documentos', (d) => d.pacienteId === paciente.id);
+  const documentosFetch = documentosResult.status === 'fulfilled' ? documentosResult.value : [];
   const documentos = documentosFetch.map((d) => ({
     date: d.fecha,
     label: d.nombre,
@@ -268,7 +274,9 @@ async function renderTimeline(paciente) {
 
   el.innerHTML = cardHtml({
     title: 'Línea de tiempo',
-    bodyHtml: items.length
+    bodyHtml: `${[consultasResult, recetasResult, documentosResult].some((result) => result.status === 'rejected')
+      ? '<p class="text-tertiary" style="font-size:12px; margin-bottom:10px;">Parte de la línea de tiempo no pudo actualizarse. Puedes seguir consultando el expediente.</p>'
+      : ''}${items.length
       ? `<div class="timeline">
           ${items
             .map(
@@ -282,7 +290,7 @@ async function renderTimeline(paciente) {
             )
             .join('')}
         </div>`
-      : '<div class="empty-state">Sin actividad registrada.</div>'
+      : '<div class="empty-state">Sin actividad registrada.</div>'}`
   });
 }
 
@@ -318,27 +326,33 @@ async function openNuevoPacienteModal() {
         const form = modalEl.querySelector('#form-nuevo-paciente');
         if (!validateRequired(form)) return;
         const data = getFormData(form);
-        const nuevo = await create('pacientes', {
-          nombre: data.nombre,
-          apellidos: data.apellidos,
-          fechaNacimiento: data.fechaNacimiento,
-          sexo: data.sexo,
-          estadoCivil: data.estadoCivil || 'No especificado',
-          grupoSanguineo: data.grupoSanguineo || 'No especificado',
-          curp: 'No registrado',
-          nss: 'No registrado',
-          foto: '',
-          contacto: { email: data.email || '', telefono: data.telefono, telefonoAlt: '', direccion: 'No registrado' },
-          aseguradora: { compania: 'Particular', poliza: '', vigenciaInicio: '', vigenciaFin: '', plan: '' },
-          contactoEmergencia: { nombre: '', parentesco: '', telefono: '' },
-          alergias: [],
-          alertas: [],
-          referencias: [],
-          estado: 'activo',
-          fechaRegistro: new Date().toISOString().slice(0, 10)
-        });
-        close();
-        navigateTo(`#/pacientes/${nuevo.id}`);
+        const submit = modalEl.querySelector('#modal-save');
+        submit.disabled = true;
+        submit.textContent = 'Guardando…';
+        try {
+          const nuevo = await create('pacientes', {
+            nombre: data.nombre,
+            apellidos: data.apellidos,
+            fechaNacimiento: data.fechaNacimiento,
+            sexo: data.sexo,
+            estadoCivil: data.estadoCivil || 'No especificado',
+            grupoSanguineo: data.grupoSanguineo || 'No especificado',
+            curp: 'No registrado',
+            nss: 'No registrado',
+            contacto: { email: data.email || '', telefono: data.telefono, telefonoAlt: '', direccion: 'No registrado' },
+            aseguradora: { compania: 'Particular', poliza: '', vigenciaInicio: '', vigenciaFin: '', plan: '' },
+            contactoEmergencia: { nombre: '', parentesco: '', telefono: '' },
+            alergias: [],
+            alertas: [],
+          });
+          close();
+          showToast({ message: 'Paciente registrado correctamente.', tone: 'success' });
+          navigateTo(`#/pacientes/${nuevo.id}`);
+        } catch (error) {
+          showToast({ message: userFacingApiError(error), tone: 'danger' });
+          submit.disabled = false;
+          submit.textContent = 'Guardar paciente';
+        }
       });
     }
   });

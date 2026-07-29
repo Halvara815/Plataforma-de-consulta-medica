@@ -7,7 +7,7 @@ const MESES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ];
 
-export function render(panelEl) {
+export async function render(panelEl) {
   const today = new Date();
   let viewYear = today.getFullYear();
   let viewMonth = today.getMonth();
@@ -25,19 +25,23 @@ export function render(panelEl) {
         ${DIAS.map((d) => `<div style="text-align:center; font-size:11px; color:var(--text-tertiary); font-weight:600;">${d}</div>`).join('')}
       </div>
       <div class="calendar-grid" id="cal-grid"></div>
+      <p class="text-tertiary" id="cal-status" style="font-size:12px; margin-top:12px;"></p>
     </div>
   `;
 
   const titleEl = panelEl.querySelector('#cal-title');
   const gridEl = panelEl.querySelector('#cal-grid');
+  const statusEl = panelEl.querySelector('#cal-status');
+  let citas = [];
 
   function draw() {
     titleEl.textContent = `${MESES[viewMonth]} ${viewYear}`;
-    const citas = getAll('citas');
     const citasPorDia = new Map();
     citas.forEach((c) => {
-      const count = citasPorDia.get(c.fecha) || 0;
-      citasPorDia.set(c.fecha, count + 1);
+      const fecha = String(c.fecha || '').slice(0, 10);
+      if (!fecha) return;
+      const count = citasPorDia.get(fecha) || 0;
+      citasPorDia.set(fecha, count + 1);
     });
 
     const firstOfMonth = new Date(viewYear, viewMonth, 1);
@@ -76,5 +80,12 @@ export function render(panelEl) {
     draw();
   });
 
+  statusEl.textContent = 'Cargando citas…';
+  try {
+    citas = await getAll('citas');
+    statusEl.textContent = citas.length ? 'Los puntos indican días con citas programadas.' : 'No hay citas programadas.';
+  } catch {
+    statusEl.textContent = 'No se pudieron cargar las citas. Puedes cambiar de mes o reintentar más tarde.';
+  }
   draw();
 }
